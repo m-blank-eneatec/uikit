@@ -284,7 +284,9 @@ export default {
                     srcset
                 ) {
                     const img = createEl('img', { class: this.clsImage, src, srcset, alt, ...attrs });
-                    on(img, 'load', () => this.setItem(item, img));
+                    // Only listen to 'load' once, because we will replace the srcset later on
+                    // and do not want to trigger the event handler again
+                    once(img, 'load', () => this.setItem(item, img));
                     on(img, 'error', () => this.setError(item));
 
                     // Image
@@ -416,8 +418,8 @@ function initZoom(slide, el) {
     if (el.tagName === 'IMG') {
         const hasSrcset = hasAttr(el, 'srcset');
         const originalSrc = attr(el, 'src');
-        let touchStartDistance = 0;
         let hasOriginalSrc = !hasSrcset;
+        let hasResetPan = false;
 
         // Initialize zoom plugin
         const zoom = Panzoom(el, {
@@ -443,37 +445,8 @@ function initZoom(slide, el) {
         }
 
         function onWheel(event) {
-            // Check if user is zooming in
-            if (event.deltaY < 0) {
-                setOriginalSrc();
-            }
-
             // Enable zooming with mouse
             zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
-        }
-
-        function onTouchStart(event) {
-            if (event.touches.length === 2) {
-                touchStartDistance = Math.hypot(
-                    event.touches[0].pageX - event.touches[1].pageX,
-                    event.touches[0].pageY - event.touches[1].pageY
-                );
-            }
-        }
-
-        function onTouchMove(event) {
-            if (event.touches.length === 2) {
-                const touchEndDistance = Math.hypot(
-                    event.touches[0].pageX - event.touches[1].pageX,
-                    event.touches[0].pageY - event.touches[1].pageY
-                );
-
-                // Check if user is zooming in
-                if (touchEndDistance > touchStartDistance) {
-                    // Change src to high resolution image
-                    setOriginalSrc();
-                }
-            }
         }
 
         function onZoomReset() {
@@ -488,9 +461,15 @@ function initZoom(slide, el) {
             zoom.zoomOut({ animate: zoomOptions.animate });
         }
 
-        let hasResetPan = false;
         function onPanZoomChange(event) {
             const { startScale, startX, startY } = zoomOptions;
+            const { scale } = event.detail;
+
+            // Change src to high resolution image when zoomed in
+            const originalSrcThreshold = 2; // 2x zoom
+            if ((scale === zoomOptions.maxScale) || ((scale / startScale) > originalSrcThreshold)) {
+                setOriginalSrc();
+            }
 
             // Reset pan position back to the center
             // and prevent another zoom or pan event
@@ -515,10 +494,6 @@ function initZoom(slide, el) {
         function addListenersAndInitializeZoom() {
             // Listen for wheel event to detect zooming
             on(el, 'wheel', onWheel);
-
-            // Listen for touch events to detect pinch zooming
-            on(el, 'touchstart', onTouchStart);
-            on(el, 'touchmove', onTouchMove);
 
             // Listen for the reset event and
             // keyboard events using the + and - keys
