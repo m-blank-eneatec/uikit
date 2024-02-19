@@ -9,6 +9,7 @@ import {
     hasAttr,
     html,
     on,
+    once,
     pointerDown,
     pointerMove,
     removeAttr,
