@@ -4,6 +4,7 @@ import {
     append,
     attr,
     css,
+    dimensions,
     fragment,
     getIndex,
     hasAttr,
@@ -14,6 +15,7 @@ import {
     pointerMove,
     removeAttr,
     removeClass,
+    toggleClass,
     Transition,
     trigger,
 } from 'uikit-util';
@@ -44,7 +46,6 @@ export default {
         items: [],
         cls: 'uk-open',
         clsPage: 'uk-lightbox-plus-page',
-        clsImage: 'uk-lightbox-plus-image',
         selList: '.uk-lightbox-plus-items',
         attrItem: 'uk-lightbox-plus-item',
         selClose: '.uk-close-large',
@@ -219,13 +220,12 @@ export default {
                 this.loadItem(this.index);
 
                 // Preload next and previous items as well after a short delay
-                const preload = function() {
+                setTimeout(() => {
                     for (let j = 0; j <= this.preload; j++) {
                         this.loadItem(this.index + j);
                         this.loadItem(this.index - j);
                     }
-                };
-                setTimeout(preload.bind(this), 300);
+                }, 300);
             },
         },
 
@@ -284,7 +284,7 @@ export default {
                 if (
                     srcset
                 ) {
-                    const img = createEl('img', { class: this.clsImage, src, srcset, alt, ...attrs });
+                    const img = createEl('img', { src, srcset, alt, ...attrs });
                     // Only listen to 'load' once, because we will replace the srcset later on
                     // and do not want to trigger the event handler again
                     once(img, 'load', () => this.setItem(item, img));
@@ -295,7 +295,7 @@ export default {
                     type === 'image' ||
                     src.match(/\.(avif|jpe?g|jfif|a?png|gif|svg|webp)($|\?)/i)
                 ) {
-                    const img = createEl('img', { class: this.clsImage, src, alt, ...attrs });
+                    const img = createEl('img', { src, alt, ...attrs });
                     on(img, 'load', () => this.setItem(item, img));
                     on(img, 'error', () => this.setError(item));
 
@@ -415,22 +415,24 @@ export default {
     },
 };
 
-function initZoom(slide, el) {
-    if (el.tagName === 'IMG') {
-        const hasSrcset = hasAttr(el, 'srcset');
-        const originalSrc = attr(el, 'src');
+function initZoom(slide, img) {
+    if (img.tagName === 'IMG') {
+        const hasSrcset = hasAttr(img, 'srcset');
+        const originalSrc = attr(img, 'src');
+        const zoomExcludeCls = 'uk-lightbox-plus-zoom-exclude';
         let hasOriginalSrc = !hasSrcset;
-        let hasResetPan = false;
+        let isWaitingForPan = false;
 
         // Initialize zoom plugin
-        const zoom = Panzoom(el, {
+        const zoom = Panzoom(img, {
             minScale: 1,
             maxScale: 3,
-            cursor: 'default',
+            cursor: 'move',
             animate: true,
             origin: '50% 50%',
             pinchAndPan: true,
             panOnlyWhenZoomed: true,
+            excludeClass: zoomExcludeCls,
             setTransform: (elem, { scale, x, y }) => {
                 css(elem, 'transform', `scale(${scale}) translate(${x}px, ${y}px)`);
             }
@@ -439,8 +441,8 @@ function initZoom(slide, el) {
 
         function setOriginalSrc() {
             if (!hasOriginalSrc) {
-                el.src = originalSrc;
-                removeAttr(el, 'srcset');
+                img.src = originalSrc;
+                removeAttr(img, 'srcset');
                 hasOriginalSrc = true;
             }
         }
@@ -462,9 +464,33 @@ function initZoom(slide, el) {
             zoom.zoomOut({ animate: zoomOptions.animate });
         }
 
+        function toggleImgState(scaleIsAtStart) {
+            // Toggle the zoomExcludeCls class to the image when zoomed all the way out
+            // to allow the user to navigate to the next slide by swiping the image
+            toggleClass(img, zoomExcludeCls, scaleIsAtStart);
+            css(img, 'cursor', scaleIsAtStart ? 'default' : zoomOptions.cursor);
+        }
+
+        function panAndWait(toX, toY) {
+            // Prevent another zoom or pan event until the animation is complete
+            // because calling pan() while the animation is running will cause the smooth animation to be interrupted
+            if (!isWaitingForPan) {
+                isWaitingForPan = true;
+                zoom.setOptions({ disableZoom: true });
+                zoom.pan(toX, toY, { animate: zoomOptions.animate, force: true });
+
+                // Reset settings after the animation is complete
+                setTimeout(() => {
+                    isWaitingForPan = false;
+                    zoom.setOptions({ disableZoom: zoomOptions.disableZoom });
+                }, zoomOptions.duration);
+            }
+        }
+
         function onPanZoomChange(event) {
             const { startScale, startX, startY } = zoomOptions;
             const { scale } = event.detail;
+            const scaleIsAtStart = (scale === startScale);
 
             // Change src to high resolution image when zoomed in
             const originalSrcThreshold = 2; // 2x zoom
@@ -472,29 +498,65 @@ function initZoom(slide, el) {
                 setOriginalSrc();
             }
 
+            // Toggle the zoomExcludeCls class to the image when zoomed all the way out
+            // to allow the user to navigate to the next slide by swiping the image
+            toggleImgState(scaleIsAtStart);
+
             // Reset pan position back to the center
             // and prevent another zoom or pan event
             // until the animation is complete
-            if (event.detail.scale === startScale) {
-                if (!hasResetPan) {
-                    hasResetPan = true;
-                    zoom.setOptions({ disableZoom: true });
-                    zoom.pan(startX, startY, { animate: zoomOptions.animate, force: true });
+            if (scaleIsAtStart) {
+                panAndWait(startX, startY);
+                return;
+            }
+        }
 
-                    // Reset settings after the animation is complete
-                    setTimeout(function(){
-                        hasResetPan = false;
-                        zoom.setOptions({ disableZoom: zoomOptions.disableZoom });
-                    }, zoomOptions.duration);
-                }
+        // Throttle the panzoomchange event handler to prevent performance issues
+        const onPanZoomThrottle = 250;
+        let onPanZoomTimeoutId = null;
+        function onPanZoomChangeThrottled(event) {
+            if (onPanZoomTimeoutId) {
+                // Clear the previous timeout and start a new one
+                clearTimeout(onPanZoomTimeoutId);
             } else {
-                hasResetPan = false;
+                // No active timeout => call the event handler immediately
+                onPanZoomChange.apply(this, arguments);
+            }
+
+            onPanZoomTimeoutId = setTimeout(() => {
+                onPanZoomChange.apply(this, arguments);
+                onPanZoomTimeoutId = null;
+
+            }, onPanZoomThrottle);
+        }
+
+        function onPanZoomEnd() {
+            // Check if the image is (almost) outside of the parent slide's boundary
+            // and pan the image back to the center if it is
+
+            // Get the dimensions of the image and the parent slide
+            const imgRect = dimensions(img);
+            const slideRect = dimensions(slide);
+
+            // An image is considered to be outside of the boundary
+            // if less than 10% of the image is still inside the slide
+            const boundsThresholdPercentage = 0.1; // 10% buffer
+            const boundsThresholdHorizontal = (slideRect.width * boundsThresholdPercentage);
+            const boundsThresholdVertical = (slideRect.height * boundsThresholdPercentage);
+
+            // Calculations
+            const isOutsideHorizontal = (imgRect.left >= slideRect.right - boundsThresholdHorizontal || imgRect.right <= slideRect.left + boundsThresholdHorizontal);
+            const isOutsideVertical = (imgRect.top >= slideRect.bottom - boundsThresholdVertical || imgRect.bottom <= slideRect.top + boundsThresholdVertical);
+
+            if (isOutsideHorizontal || isOutsideVertical) {
+                const { startX, startY } = zoomOptions;
+                panAndWait(startX, startY);
             }
         }
 
         function addListenersAndInitializeZoom() {
             // Listen for wheel event to detect zooming
-            on(el, 'wheel', onWheel);
+            on(img, 'wheel', onWheel);
 
             // Listen for the reset event and
             // keyboard events using the + and - keys
@@ -502,14 +564,17 @@ function initZoom(slide, el) {
             on(slide, 'zoom.in', onZoomIn);
             on(slide, 'zoom.out', onZoomOut);
 
-            // Listen for panzoomchange event
-            // to reset the pan position back to the center
-            // when the image is zoomed all the way out
-            on(el, 'panzoomchange', onPanZoomChange);
+            // Listen for zoom events
+            on(img, 'panzoomchange', onPanZoomChangeThrottled);
+            on(img, 'panzoomend', onPanZoomEnd);
         }
 
         // Add listeners and initialize zoom
         addListenersAndInitializeZoom();
+
+        // Add the zoomExcludeCls class to the image in the beginning
+        // to allow the user to navigate to the next slide by swiping the image
+        toggleImgState(true);
     }
 }
 
