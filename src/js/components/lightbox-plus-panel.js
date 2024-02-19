@@ -3,12 +3,15 @@ import {
     addClass,
     append,
     attr,
+    css,
     fragment,
     getIndex,
+    hasAttr,
     html,
     on,
     pointerDown,
     pointerMove,
+    removeAttr,
     removeClass,
     Transition,
     trigger,
@@ -17,6 +20,7 @@ import Modal from '../mixin/modal';
 import Slideshow from '../mixin/slideshow';
 import { keyMap } from '../util/keys';
 import Animations from './internal/lightbox-animations';
+import Panzoom from '@panzoom/panzoom'
 
 export default {
     mixins: [Modal, Slideshow],
@@ -28,15 +32,18 @@ export default {
         preload: Number,
         videoAutoplay: Boolean,
         template: String,
+        zoomImages: Boolean,
     },
 
     data: () => ({
         preload: 1,
         videoAutoplay: false,
         delayControls: 3000,
+        zoomImages: true,
         items: [],
         cls: 'uk-open',
         clsPage: 'uk-lightbox-plus-page',
+        clsImage: 'uk-lightbox-plus-image',
         selList: '.uk-lightbox-plus-items',
         attrItem: 'uk-lightbox-plus-item',
         selClose: '.uk-close-large',
@@ -128,6 +135,32 @@ export default {
         },
 
         {
+            name: 'keydown',
+
+            el: () => document,
+
+            handler(event) {
+                if (!this.isToggled(this.$el)) {
+                    return;
+                }
+
+                const { key } = event;
+
+                if (this.zoomImages) {
+                    // Trigger a zoom event via keyboard
+                    const item = this.getItem();
+                    const slide = this.getSlide(item);
+
+                    if (key === '+') {
+                        trigger(slide, 'zoom.in');
+                    } else if (key === '-') {
+                        trigger(slide, 'zoom.out');
+                    }
+                }
+            },
+        },
+
+        {
             name: 'keyup',
 
             el: () => document,
@@ -181,9 +214,17 @@ export default {
             handler() {
                 html(this.caption, this.getItem().caption || '');
 
-                for (let j = -this.preload; j <= this.preload; j++) {
-                    this.loadItem(this.index + j);
-                }
+                // Preload this item first
+                this.loadItem(this.index);
+
+                // Preload next and previous items as well after a short delay
+                const preload = function() {
+                    for (let j = 0; j <= this.preload; j++) {
+                        this.loadItem(this.index + j);
+                        this.loadItem(this.index - j);
+                    }
+                };
+                setTimeout(preload.bind(this), 300);
             },
         },
 
@@ -196,10 +237,33 @@ export default {
         },
 
         {
+            name: 'itemhidden',
+
+            handler({ target }) {
+                // Trigger a reset zoom event
+                if (this.zoomImages) {
+                    trigger(target, 'zoom.reset');
+                }
+            },
+        },
+
+        {
+            name: 'itemloaded',
+
+            handler(_, __, slide, item) {
+                if (slide && item) {
+                    if (item.tagName === 'IMG' && this.zoomImages) {
+                        initZoom(slide, item);
+                    }
+                }
+            },
+        },
+
+        {
             name: 'itemload',
 
             async handler(_, item) {
-                const { source: src, type, alt = '', poster, attrs = {} } = item;
+                const { source: src, srcset, type, alt = '', poster, attrs = {} } = item;
 
                 this.setItem(item, '<span uk-spinner></span>');
 
@@ -215,12 +279,20 @@ export default {
                     'uk-video': `${this.videoAutoplay}`,
                 };
 
-                // Image
+                // Image with srcset
                 if (
+                    srcset
+                ) {
+                    const img = createEl('img', { class: this.clsImage, src, srcset, alt, ...attrs });
+                    on(img, 'load', () => this.setItem(item, img));
+                    on(img, 'error', () => this.setError(item));
+
+                    // Image
+                } else if (
                     type === 'image' ||
                     src.match(/\.(avif|jpe?g|jfif|a?png|gif|svg|webp)($|\?)/i)
                 ) {
-                    const img = createEl('img', { src, alt, ...attrs });
+                    const img = createEl('img', { class: this.clsImage, src, alt, ...attrs });
                     on(img, 'load', () => this.setItem(item, img));
                     on(img, 'error', () => this.setError(item));
 
@@ -315,7 +387,8 @@ export default {
         },
 
         setItem(item, content) {
-            trigger(this.$el, 'itemloaded', [this, html(this.getSlide(item), content)]);
+            const slide = this.getSlide(item);
+            trigger(this.$el, 'itemloaded', [this, slide, html(slide, content)]);
         },
 
         getSlide(item) {
@@ -338,6 +411,131 @@ export default {
         },
     },
 };
+
+function initZoom(slide, el) {
+    if (el.tagName === 'IMG') {
+        const hasSrcset = hasAttr(el, 'srcset');
+        const originalSrc = attr(el, 'src');
+        let touchStartDistance = 0;
+        let hasOriginalSrc = !hasSrcset;
+
+        // Initialize zoom plugin
+        const zoom = Panzoom(el, {
+            minScale: 1,
+            maxScale: 3,
+            cursor: 'default',
+            animate: true,
+            origin: '50% 50%',
+            pinchAndPan: true,
+            panOnlyWhenZoomed: true,
+            setTransform: (elem, { scale, x, y }) => {
+                css(elem, 'transform', `scale(${scale}) translate(${x}px, ${y}px)`);
+            }
+        });
+        const zoomOptions = zoom.getOptions();
+
+        function setOriginalSrc() {
+            if (!hasOriginalSrc) {
+                el.src = originalSrc;
+                removeAttr(el, 'srcset');
+                hasOriginalSrc = true;
+            }
+        }
+
+        function onWheel(event) {
+            // Check if user is zooming in
+            if (event.deltaY < 0) {
+                setOriginalSrc();
+            }
+
+            // Enable zooming with mouse
+            zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
+        }
+
+        function onTouchStart(event) {
+            if (event.touches.length === 2) {
+                touchStartDistance = Math.hypot(
+                    event.touches[0].pageX - event.touches[1].pageX,
+                    event.touches[0].pageY - event.touches[1].pageY
+                );
+            }
+        }
+
+        function onTouchMove(event) {
+            if (event.touches.length === 2) {
+                const touchEndDistance = Math.hypot(
+                    event.touches[0].pageX - event.touches[1].pageX,
+                    event.touches[0].pageY - event.touches[1].pageY
+                );
+
+                // Check if user is zooming in
+                if (touchEndDistance > touchStartDistance) {
+                    // Change src to high resolution image
+                    setOriginalSrc();
+                }
+            }
+        }
+
+        function onZoomReset() {
+            zoom.reset({ animate: false });
+        }
+
+        function onZoomIn() {
+            zoom.zoomIn({ animate: zoomOptions.animate });
+        }
+
+        function onZoomOut() {
+            zoom.zoomOut({ animate: zoomOptions.animate });
+        }
+
+        let hasResetPan = false;
+        function onPanZoomChange(event) {
+            const { startScale, startX, startY } = zoomOptions;
+
+            // Reset pan position back to the center
+            // and prevent another zoom or pan event
+            // until the animation is complete
+            if (event.detail.scale === startScale) {
+                if (!hasResetPan) {
+                    hasResetPan = true;
+                    zoom.setOptions({ disableZoom: true });
+                    zoom.pan(startX, startY, { animate: zoomOptions.animate, force: true });
+
+                    // Reset settings after the animation is complete
+                    setTimeout(function(){
+                        hasResetPan = false;
+                        zoom.setOptions({ disableZoom: zoomOptions.disableZoom });
+                    }, zoomOptions.duration);
+                }
+            } else {
+                hasResetPan = false;
+            }
+        }
+
+        function addListenersAndInitializeZoom() {
+            // Listen for wheel event to detect zooming
+            on(el, 'wheel', onWheel);
+
+            // Listen for touch events to detect pinch zooming
+            on(el, 'touchstart', onTouchStart);
+            on(el, 'touchmove', onTouchMove);
+
+            // Listen for the reset event and
+            // keyboard events using the + and - keys
+            on(slide, 'zoom.reset', onZoomReset);
+            on(slide, 'zoom.in', onZoomIn);
+            on(slide, 'zoom.out', onZoomOut);
+
+            // Listen for panzoomchange event
+            // to reset the pan position back to the center
+            // when the image is zoomed all the way out
+            on(el, 'panzoomchange', onPanZoomChange);
+        }
+
+        // Add listeners and initialize zoom
+        addListenersAndInitializeZoom();
+    }
+}
 
 function createEl(tag, attrs) {
     const el = fragment(`<${tag}>`);

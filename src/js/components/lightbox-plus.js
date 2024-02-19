@@ -65,7 +65,7 @@ export default {
 
 function install(UIkit, LightboxPlus) {
     if (!UIkit.LightboxPlusPanel) {
-        UIkit.component('lightboxPanel', LightboxPlusPanel);
+        UIkit.component('lightboxPlusPanel', LightboxPlusPanel);
     }
 
     assign(LightboxPlus.props, UIkit.component('lightboxPlusPanel').options.props);
