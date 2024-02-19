@@ -7,7 +7,10 @@ export default {
 
     props: { toggle: String },
 
-    data: { toggle: 'a' },
+    data: {
+        toggle: 'a',
+        swipeThreshold: 10 // same threshold as in src/js/mixin/slider-drag.js
+    },
 
     computed: {
         toggles: ({ toggle }, $el) => $$(toggle, $el),
@@ -28,18 +31,58 @@ export default {
         this.hide();
     },
 
-    events: {
-        name: 'click',
+    events: [
+        {
+            name: "mousedown",
 
-        delegate() {
-            return `${this.toggle}:not(.uk-disabled)`;
+            delegate() {
+                return `${this.toggle}:not(.uk-disabled)`;
+            },
+
+            handler(e) {
+                e.preventDefault();
+                this.mouseDownPos = { x: e.clientX, y: e.clientY };
+            }
         },
 
-        handler(e) {
-            e.preventDefault();
-            this.show(e.current);
+        {
+            name: "mouseup",
+
+            delegate() {
+                return `${this.toggle}:not(.uk-disabled)`;
+            },
+
+            handler(e) {
+                e.preventDefault();
+                this.mouseUpPos = { x: e.clientX, y: e.clientY };
+            }
         },
-    },
+
+        {
+            name: "click",
+
+            delegate() {
+                return `${this.toggle}:not(.uk-disabled)`;
+            },
+
+            handler(e) {
+                e.preventDefault();
+
+                // Try to differentiate between click and swipe (e.g. for slideshows)
+                const swipeDistance = Math.hypot(
+                    this.mouseUpPos.x - this.mouseDownPos.x,
+                    this.mouseUpPos.y - this.mouseDownPos.y
+                );
+
+                if (swipeDistance >= this.swipeThreshold) {
+                    // This action was a swipe, so don't open the lightbox
+                    return;
+                }
+
+                this.show(e.current);
+            }
+        }
+    ],
 
     methods: {
         show(index) {
