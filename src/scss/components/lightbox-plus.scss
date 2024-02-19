@@ -1,0 +1,230 @@
+// Name:            Lightbox
+// Description:     Component to create an lightbox image gallery
+//
+// Component:       `uk-lightbox-plus`
+//
+// Sub-objects:     `uk-lightbox-plus-page`
+//                  `uk-lightbox-plus-items`
+//                  `uk-lightbox-plus-toolbar`
+//                  `uk-lightbox-plus-toolbar-icon`
+//                  `uk-lightbox-plus-button`
+//                  `uk-lightbox-plus-caption`
+//                  `uk-lightbox-plus-iframe`
+//
+// States:          `uk-open`
+//
+// ========================================================================
+
+
+// Variables
+// ========================================================================
+
+
+
+
+
+
+
+
+
+
+/* ========================================================================
+   Component: Lightbox
+ ========================================================================== */
+
+/*
+ * 1. Hide by default
+ * 2. Set position
+ * 3. Allow scrolling for the modal dialog
+ * 4. Horizontal padding
+ * 5. Mask the background page
+ * 6. Fade-in transition
+ * 7. Prevent cancellation of pointer events while dragging
+ */
+
+.uk-lightbox-plus {
+    /* 1 */
+    display: none;
+    /* 2 */
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: $lightbox-z-index;
+    /* 5 */
+    background: $lightbox-background;
+    /* 6 */
+    opacity: 0;
+    transition: opacity 0.15s linear;
+    /* 7 */
+    touch-action: pinch-zoom;
+    @if(mixin-exists(hook-lightbox-plus)) {@include hook-lightbox-plus();}
+}
+
+/*
+ * Open
+ * 1. Center child
+ * 2. Fade-in
+ */
+
+.uk-lightbox-plus.uk-open {
+    display: block;
+    /* 2 */
+    opacity: 1;
+}
+
+/*
+ * Focus
+ */
+
+.uk-lightbox-plus :focus-visible { outline-color: $lightbox-focus-outline; }
+
+
+/* Page
+ ========================================================================== */
+
+/*
+ * Prevent scrollbars
+ */
+
+.uk-lightbox-plus-page { overflow: hidden; }
+
+
+/* Item
+ ========================================================================== */
+
+/*
+ * 1. Center child within the viewport
+ * 2. Not visible by default
+ * 3. Color needed for spinner icon
+ * 4. Optimize animation
+ * 5. Responsiveness
+ *    Using `vh` for `max-height` to fix image proportions after resize in Safari and Opera
+ */
+
+.uk-lightbox-plus-items > * {
+    /* 1 */
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    /* 2 */
+    display: none;
+    justify-content: center;
+    align-items: center;
+    /* 3 */
+    color: $lightbox-item-color;
+    /* 4 */
+    will-change: transform, opacity;
+    @if(mixin-exists(hook-lightbox-plus-item)) {@include hook-lightbox-plus-item();}
+}
+
+/* 5 */
+.uk-lightbox-plus-items > * > * {
+    max-width: $lightbox-item-max-width;
+    max-height: $lightbox-item-max-height;
+}
+
+.uk-lightbox-plus-items > * > :not(iframe) {
+    width: auto;
+    height: auto;
+}
+
+.uk-lightbox-plus-items > .uk-active { display: flex; }
+
+/* Toolbar
+ ========================================================================== */
+
+.uk-lightbox-plus-toolbar {
+    padding: $lightbox-toolbar-padding-vertical $lightbox-toolbar-padding-horizontal;
+    background: $lightbox-toolbar-background;
+    color: $lightbox-toolbar-color;
+    @if(mixin-exists(hook-lightbox-plus-toolbar)) {@include hook-lightbox-plus-toolbar();}
+}
+
+.uk-lightbox-plus-toolbar > * { color: $lightbox-toolbar-color; }
+
+
+/* Toolbar Icon (Close)
+ ========================================================================== */
+
+.uk-lightbox-plus-toolbar-icon {
+    padding: $lightbox-toolbar-icon-padding;
+    color: $lightbox-toolbar-icon-color;
+    @if(mixin-exists(hook-lightbox-plus-toolbar-icon)) {@include hook-lightbox-plus-toolbar-icon();}
+}
+
+/*
+ * Hover
+ */
+
+.uk-lightbox-plus-toolbar-icon:hover {
+    color: $lightbox-toolbar-icon-hover-color;
+    @if(mixin-exists(hook-lightbox-plus-toolbar-icon-hover)) {@include hook-lightbox-plus-toolbar-icon-hover();}
+}
+
+
+
+/* Button (Slidenav)
+ ========================================================================== */
+
+/*
+ * 1. Center icon vertically and horizontally
+ */
+
+.uk-lightbox-plus-button {
+    box-sizing: border-box;
+    width: $lightbox-button-size;
+    height: $lightbox-button-size;
+    background: $lightbox-button-background;
+    color: $lightbox-button-color;
+    /* 1 */
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    @if(mixin-exists(hook-lightbox-plus-button)) {@include hook-lightbox-plus-button();}
+}
+
+/* Hover */
+.uk-lightbox-plus-button:hover {
+    color: $lightbox-button-hover-color;
+    @if(mixin-exists(hook-lightbox-plus-button-hover)) {@include hook-lightbox-plus-button-hover();}
+}
+
+/* OnClick */
+.uk-lightbox-plus-button:active {
+    @if(mixin-exists(hook-lightbox-plus-button-active)) {@include hook-lightbox-plus-button-active();}
+}
+
+
+/* Caption
+ ========================================================================== */
+
+.uk-lightbox-plus-caption:empty { display: none; }
+
+
+/* Iframe
+ ========================================================================== */
+
+.uk-lightbox-plus-iframe {
+    width: 80%;
+    height: 80%;
+}
+
+
+// Hooks
+// ========================================================================
+
+@if(mixin-exists(hook-lightbox-plus-misc)) {@include hook-lightbox-plus-misc();}
+
+// @mixin hook-lightbox-plus(){}
+// @mixin hook-lightbox-plus-item(){}
+// @mixin hook-lightbox-plus-toolbar(){}
+// @mixin hook-lightbox-plus-toolbar-icon(){}
+// @mixin hook-lightbox-plus-toolbar-icon-hover(){}
+// @mixin hook-lightbox-plus-button(){}
+// @mixin hook-lightbox-plus-button-hover(){}
+// @mixin hook-lightbox-plus-button-active(){}
+// @mixin hook-lightbox-plus-misc(){}
