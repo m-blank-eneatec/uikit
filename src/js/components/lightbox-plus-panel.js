@@ -3,6 +3,7 @@ import {
     addClass,
     append,
     attr,
+    clamp,
     css,
     dimensions,
     fragment,
@@ -421,10 +422,11 @@ function initZoom(slide, img) {
         const originalSrc = attr(img, 'src');
         const zoomExcludeCls = 'uk-lightbox-plus-zoom-exclude';
         let hasOriginalSrc = !hasSrcset;
-        let isWaitingForPan = false;
+        let isWaitingForAnimation = false;
 
         // Initialize zoom plugin
         const zoom = Panzoom(img, {
+            startScale: 1,
             minScale: 1,
             maxScale: 3,
             cursor: 'move',
@@ -471,30 +473,57 @@ function initZoom(slide, img) {
             css(img, 'cursor', scaleIsAtStart ? 'default' : zoomOptions.cursor);
         }
 
-        function panAndWait(toX, toY) {
+        function panAndWait(toX, toY, animate = zoomOptions.animate) {
             // Prevent another zoom or pan event until the animation is complete
             // because calling pan() while the animation is running will cause the smooth animation to be interrupted
-            if (!isWaitingForPan) {
-                isWaitingForPan = true;
-                zoom.setOptions({ disableZoom: true });
-                zoom.pan(toX, toY, { animate: zoomOptions.animate, force: true });
+            if (!isWaitingForAnimation) {
+                isWaitingForAnimation = true;
+                zoom.setOptions({ disableZoom: true, disablePan: true });
+                zoom.pan(toX, toY, { animate, force: true });
 
                 // Reset settings after the animation is complete
                 setTimeout(() => {
-                    isWaitingForPan = false;
-                    zoom.setOptions({ disableZoom: zoomOptions.disableZoom });
+                    isWaitingForAnimation = false;
+                    zoom.setOptions({ disableZoom: zoomOptions.disableZoom, disablePan: zoomOptions.disablePan });
                 }, zoomOptions.duration);
             }
         }
 
-        function onPanZoomChange(event) {
-            const { startScale, startX, startY } = zoomOptions;
-            const { scale } = event.detail;
-            const scaleIsAtStart = (scale === startScale);
+        function clampPanToOffset(value, imgDimension, slideDimension, scale) {
+            // Check if the image is filling the slide in the current axis (vertically or horizontally)
+            const isFillingSlide = imgDimension >= slideDimension;
+            if (isFillingSlide) {
+                // Calculate the maximum offset on the current axis and clamp the value
+                const maxOffset = ((imgDimension - slideDimension) / scale / 2);
+                return clamp(value, -maxOffset, maxOffset);
+            } else {
+                // Center the image on the current axis to create even spacing on both sides
+                return 0;
+            }
+        }
+
+        function constrainPan(scale, x, y, animate = zoomOptions.animate) {
+            // Get the dimensions of the image and the parent slide
+            const { width: imgWidth, height: imgHeight } = dimensions(img);
+            const { width: slideWidth, height: slideHeight } = dimensions(slide);
+
+            // Clamp the x and y values
+            const clampedX = clampPanToOffset(x, imgWidth, slideWidth, scale);
+            const clampedY = clampPanToOffset(y, imgHeight, slideHeight, scale);
+
+            if (x !== clampedX || y !== clampedY) {
+                // Pan the image to the clamped position
+                panAndWait(clampedX, clampedY, animate);
+            }
+        }
+
+        function onPanZoom(event) {
+            const { scale, x, y } = event.detail;
+            const scaleIsAtStart = (scale === 1);
 
             // Change src to high resolution image when zoomed in
             const originalSrcThreshold = 2; // 2x zoom
-            if ((scale === zoomOptions.maxScale) || ((scale / startScale) > originalSrcThreshold)) {
+            if ((scale === zoomOptions.maxScale) || (scale > originalSrcThreshold)) {
                 setOriginalSrc();
             }
 
@@ -503,55 +532,33 @@ function initZoom(slide, img) {
             toggleImgState(scaleIsAtStart);
 
             // Reset pan position back to the center
-            // and prevent another zoom or pan event
-            // until the animation is complete
             if (scaleIsAtStart) {
-                panAndWait(startX, startY);
-                return;
+                panAndWait(0, 0);
             }
         }
 
         // Throttle the panzoomchange event handler to prevent performance issues
         const onPanZoomThrottle = 250;
         let onPanZoomTimeoutId = null;
-        function onPanZoomChangeThrottled(event) {
+        function onPanZoomThrottled(event) {
             if (onPanZoomTimeoutId) {
                 // Clear the previous timeout and start a new one
                 clearTimeout(onPanZoomTimeoutId);
             } else {
                 // No active timeout => call the event handler immediately
-                onPanZoomChange.apply(this, arguments);
+                onPanZoom.apply(this, arguments);
             }
 
             onPanZoomTimeoutId = setTimeout(() => {
-                onPanZoomChange.apply(this, arguments);
+                onPanZoom.apply(this, arguments);
                 onPanZoomTimeoutId = null;
 
             }, onPanZoomThrottle);
         }
 
-        function onPanZoomEnd() {
-            // Check if the image is (almost) outside of the parent slide's boundary
-            // and pan the image back to the center if it is
-
-            // Get the dimensions of the image and the parent slide
-            const imgRect = dimensions(img);
-            const slideRect = dimensions(slide);
-
-            // An image is considered to be outside of the boundary
-            // if less than 10% of the image is still inside the slide
-            const boundsThresholdPercentage = 0.1; // 10% buffer
-            const boundsThresholdHorizontal = (slideRect.width * boundsThresholdPercentage);
-            const boundsThresholdVertical = (slideRect.height * boundsThresholdPercentage);
-
-            // Calculations
-            const isOutsideHorizontal = (imgRect.left >= slideRect.right - boundsThresholdHorizontal || imgRect.right <= slideRect.left + boundsThresholdHorizontal);
-            const isOutsideVertical = (imgRect.top >= slideRect.bottom - boundsThresholdVertical || imgRect.bottom <= slideRect.top + boundsThresholdVertical);
-
-            if (isOutsideHorizontal || isOutsideVertical) {
-                const { startX, startY } = zoomOptions;
-                panAndWait(startX, startY);
-            }
+        function onPanZoomEnd(event) {
+            const { scale, x, y } = event.detail;
+            constrainPan(scale, x, y);
         }
 
         function addListenersAndInitializeZoom() {
@@ -565,7 +572,7 @@ function initZoom(slide, img) {
             on(slide, 'zoom.out', onZoomOut);
 
             // Listen for zoom events
-            on(img, 'panzoomchange', onPanZoomChangeThrottled);
+            on(img, 'panzoomzoom', onPanZoomThrottled);
             on(img, 'panzoomend', onPanZoomEnd);
         }
 
