@@ -9,6 +9,7 @@ import {
     fragment,
     getIndex,
     hasAttr,
+    hasTouch,
     html,
     observeViewportResize,
     on,
@@ -56,6 +57,7 @@ export default {
         pauseOnHover: false,
         velocity: 2,
         Animations,
+        draggable: !hasTouch,
         template: `<div class="uk-lightbox-plus uk-overflow-hidden">
                         <ul class="uk-lightbox-plus-items"></ul>
                         <div class="uk-lightbox-plus-toolbar uk-position-top uk-text-right uk-transition-slide-top uk-transition-opaque">
@@ -233,11 +235,6 @@ export default {
                 this.animation = Animations['scale'];
                 removeClass(e.target, this.clsActive);
                 this.stack.splice(1, 0, this.index);
-
-                // Trigger a resize event
-                const item = this.getItem();
-                const slide = this.getSlide(item);
-                trigger(slide, 'zoom.resize');
             },
         },
 
@@ -245,10 +242,18 @@ export default {
             name: 'itemshow',
 
             handler() {
-                html(this.caption, this.getItem().caption || '');
+                const item = this.getItem();
+                const slide = this.getSlide(item);
 
-                // Preload this item first
-                this.loadItem(this.index);
+                html(this.caption, item.caption || '');
+
+                if (!slide.childElementCount) {
+                    // Preload this item first
+                    this.loadItem(this.index);
+                } else {
+                    // Trigger a resize event
+                    trigger(slide, 'zoom.resize');
+                }
 
                 // Preload next and previous items as well after a short delay
                 setTimeout(() => {

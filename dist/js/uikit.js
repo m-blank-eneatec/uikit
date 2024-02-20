@@ -5238,6 +5238,7 @@
         pauseOnHover: false,
         velocity: 2,
         Animations: Animations$1,
+        draggable: !hasTouch,
         template: `<div class="uk-lightbox-plus uk-overflow-hidden"> <ul class="uk-lightbox-plus-items"></ul> <div class="uk-lightbox-plus-toolbar uk-position-top uk-text-right uk-transition-slide-top uk-transition-opaque"> <button class="uk-lightbox-plus-toolbar-icon uk-close-large" type="button" uk-close></button> </div> <a class="uk-lightbox-plus-button uk-position-center-left uk-position-medium uk-transition-fade" href uk-slidenav-previous uk-lightbox-plus-item="previous"></a> <a class="uk-lightbox-plus-button uk-position-center-right uk-position-medium uk-transition-fade" href uk-slidenav-next uk-lightbox-plus-item="next"></a> <div class="uk-lightbox-plus-toolbar uk-lightbox-plus-caption uk-position-bottom uk-text-center uk-transition-slide-bottom uk-transition-opaque"></div> </div>`
       }),
       created() {
@@ -5362,16 +5363,19 @@
             this.animation = Animations$1["scale"];
             removeClass(e.target, this.clsActive);
             this.stack.splice(1, 0, this.index);
-            const item = this.getItem();
-            const slide = this.getSlide(item);
-            trigger(slide, "zoom.resize");
           }
         },
         {
           name: "itemshow",
           handler() {
-            html(this.caption, this.getItem().caption || "");
-            this.loadItem(this.index);
+            const item = this.getItem();
+            const slide = this.getSlide(item);
+            html(this.caption, item.caption || "");
+            if (!slide.childElementCount) {
+              this.loadItem(this.index);
+            } else {
+              trigger(slide, "zoom.resize");
+            }
             setTimeout(() => {
               for (let j = 0; j <= this.preload; j++) {
                 this.loadItem(this.index + j);
