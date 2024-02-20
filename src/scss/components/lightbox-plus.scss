@@ -127,6 +127,10 @@
     max-height: $lightbox-item-max-height;
 }
 
+.uk-lightbox-plus-items > * > img {
+    object-fit: contain;
+}
+
 .uk-lightbox-plus-items > * > :not(iframe) {
     width: auto;
     height: auto;

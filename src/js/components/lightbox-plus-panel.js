@@ -10,6 +10,7 @@ import {
     getIndex,
     hasAttr,
     html,
+    observeViewportResize,
     on,
     once,
     pointerDown,
@@ -25,6 +26,7 @@ import Slideshow from '../mixin/slideshow';
 import { keyMap } from '../util/keys';
 import Animations from './internal/lightbox-animations';
 import Panzoom from '@panzoom/panzoom'
+import { throttle } from '@github/mini-throttle';
 
 export default {
     mixins: [Modal, Slideshow],
@@ -112,6 +114,29 @@ export default {
             self: true,
 
             handler: 'showControls',
+        },
+
+        {
+            name: 'shown',
+
+            self: true,
+
+            handler() {
+                const onResizeHandler = () => {
+                    if (!this.isToggled(this.$el)) {
+                        return;
+                    }
+
+                    if (this.zoomImages) {
+                        // Trigger a resize event
+                        const item = this.getItem();
+                        const slide = this.getSlide(item);
+                        trigger(slide, 'zoom.resize');
+                    }
+                };
+
+                observeViewportResize(throttle(onResizeHandler, THROTTLE_DELAY));
+            },
         },
 
         {
@@ -208,6 +233,11 @@ export default {
                 this.animation = Animations['scale'];
                 removeClass(e.target, this.clsActive);
                 this.stack.splice(1, 0, this.index);
+
+                // Trigger a resize event
+                const item = this.getItem();
+                const slide = this.getSlide(item);
+                trigger(slide, 'zoom.resize');
             },
         },
 
@@ -432,8 +462,8 @@ const ZOOM_OPTIONS = {
 // Once the user has zoomed in by this amount, the original image source will be set as the src attribute
 const ORIGINAL_SRC_THRESHOLD = 2;
 
-// Throttle the panzoomchange event handler to prevent performance issues
-const PAN_ZOOM_THROTTLE = 250;
+// Throttle expensive event handlers to prevent performance issues
+const THROTTLE_DELAY = 250;
 
 function initZoom(slide, img) {
     if (img.tagName !== 'IMG') return;
@@ -452,6 +482,28 @@ function initZoom(slide, img) {
             img.src = originalSrc;
             removeAttr(img, 'srcset');
             hasOriginalSrc = true;
+        }
+    }
+
+    function scaleImgToSlide() {
+        // Reset the image to its original size and position
+        css(img, 'height', 'auto');
+        css(img, 'width', 'auto');
+
+        // The image should fill out the parent slide without cropping or stretching
+        const { width: imgWidth, height: imgHeight } = dimensions(img);
+        const { width: slideWidth, height: slideHeight } = dimensions(slide);
+
+        // Stop if the image has no dimensions yet
+        if (imgWidth === 0 || imgHeight === 0) return;
+
+        const imgAspectRatio = imgWidth / imgHeight;
+        const slideAspectRatio = slideWidth / slideHeight;
+
+        if (imgAspectRatio > slideAspectRatio) {
+            css(img, 'width', '100%');
+        } else {
+            css(img, 'height', '100%');
         }
     }
 
@@ -521,8 +573,7 @@ function initZoom(slide, img) {
         const scaleIsAtStart = (scale === 1);
 
         // Change src to high resolution image when zoomed in
-        const originalSrcThreshold = 2; // 2x zoom
-        if ((scale === zoomOptions.maxScale) || (scale > originalSrcThreshold)) {
+        if ((scale === zoomOptions.maxScale) || (scale > ORIGINAL_SRC_THRESHOLD)) {
             setOriginalSrc();
         }
 
@@ -536,25 +587,6 @@ function initZoom(slide, img) {
         }
     }
 
-    // Throttle the panzoomchange event handler to prevent performance issues
-    const onPanZoomThrottle = 250;
-    let onPanZoomTimeoutId = null;
-    function onPanZoomThrottled(event) {
-        if (onPanZoomTimeoutId) {
-            // Clear the previous timeout and start a new one
-            clearTimeout(onPanZoomTimeoutId);
-        } else {
-            // No active timeout => call the event handler immediately
-            onPanZoom.apply(this, arguments);
-        }
-
-        onPanZoomTimeoutId = setTimeout(() => {
-            onPanZoom.apply(this, arguments);
-            onPanZoomTimeoutId = null;
-
-        }, onPanZoomThrottle);
-    }
-
     function onPanZoomEnd(event) {
         const { scale, x, y } = event.detail;
         constrainPan(scale, x, y);
@@ -562,20 +594,21 @@ function initZoom(slide, img) {
 
     // Add listeners
     on(img, 'wheel', onWheel);
-    on(img, 'panzoomzoom', onPanZoomThrottled);
+    on(img, 'panzoomzoom', throttle(onPanZoom, THROTTLE_DELAY));
     on(img, 'panzoomend', onPanZoomEnd);
 
     // Add listeners that are called by the lightbox component
-    const onZoomIn = onZoom(zoom.zoomIn);
-    const onZoomOut = onZoom(zoom.zoomOut);
-    const onZoomReset = onZoom(zoom.reset, false);
-    on(slide, 'zoom.in', onZoomIn);
-    on(slide, 'zoom.out', onZoomOut);
-    on(slide, 'zoom.reset', onZoomReset);
+    on(slide, 'zoom.in', onZoom(zoom.zoomIn));
+    on(slide, 'zoom.out', onZoom(zoom.zoomOut));
+    on(slide, 'zoom.reset', onZoom(zoom.reset, false));
+    on(slide, 'zoom.resize', scaleImgToSlide);
 
     // Add the exclude class to the image in the beginning
     // to allow the user to navigate to the next slide by swiping the image
     toggleImgState(true);
+
+    // Scale the image to the size of the slide
+    scaleImgToSlide();
 }
 
 function createEl(tag, attrs) {

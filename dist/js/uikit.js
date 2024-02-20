@@ -5177,6 +5177,42 @@
     }
     Panzoom.defaultOptions = defaultOptions;
 
+    function throttle(callback, wait = 0, { start = true, middle = true, once = false } = {}) {
+        let innerStart = start;
+        let last = 0;
+        let timer;
+        let cancelled = false;
+        function fn(...args) {
+            if (cancelled)
+                return;
+            const delta = Date.now() - last;
+            last = Date.now();
+            if (start && middle && delta >= wait) {
+                innerStart = true;
+            }
+            if (innerStart) {
+                innerStart = false;
+                callback.apply(this, args);
+                if (once)
+                    fn.cancel();
+            }
+            else if ((middle && delta < wait) || !middle) {
+                clearTimeout(timer);
+                timer = setTimeout(() => {
+                    last = Date.now();
+                    callback.apply(this, args);
+                    if (once)
+                        fn.cancel();
+                }, !middle ? wait : wait - delta);
+            }
+        }
+        fn.cancel = () => {
+            clearTimeout(timer);
+            cancelled = true;
+        };
+        return fn;
+    }
+
     var LightboxPlusPanel = {
       mixins: [Modal, Slideshow],
       functional: true,
@@ -5239,6 +5275,23 @@
           name: "shown",
           self: true,
           handler: "showControls"
+        },
+        {
+          name: "shown",
+          self: true,
+          handler() {
+            const onResizeHandler = () => {
+              if (!this.isToggled(this.$el)) {
+                return;
+              }
+              if (this.zoomImages) {
+                const item = this.getItem();
+                const slide = this.getSlide(item);
+                trigger(slide, "zoom.resize");
+              }
+            };
+            observeViewportResize(throttle(onResizeHandler, THROTTLE_DELAY));
+          }
         },
         {
           name: "hide",
@@ -5309,6 +5362,9 @@
             this.animation = Animations$1["scale"];
             removeClass(e.target, this.clsActive);
             this.stack.splice(1, 0, this.index);
+            const item = this.getItem();
+            const slide = this.getSlide(item);
+            trigger(slide, "zoom.resize");
           }
         },
         {
@@ -5471,6 +5527,8 @@
       panOnlyWhenZoomed: true,
       excludeClass: "uk-lightbox-plus-zoom-exclude"
     };
+    const ORIGINAL_SRC_THRESHOLD = 2;
+    const THROTTLE_DELAY = 250;
     function initZoom(slide, img) {
       if (img.tagName !== "IMG")
         return;
@@ -5485,6 +5543,21 @@
           img.src = originalSrc;
           removeAttr(img, "srcset");
           hasOriginalSrc = true;
+        }
+      }
+      function scaleImgToSlide() {
+        css(img, "height", "auto");
+        css(img, "width", "auto");
+        const { width: imgWidth, height: imgHeight } = dimensions$1(img);
+        const { width: slideWidth, height: slideHeight } = dimensions$1(slide);
+        if (imgWidth === 0 || imgHeight === 0)
+          return;
+        const imgAspectRatio = imgWidth / imgHeight;
+        const slideAspectRatio = slideWidth / slideHeight;
+        if (imgAspectRatio > slideAspectRatio) {
+          css(img, "width", "100%");
+        } else {
+          css(img, "height", "100%");
         }
       }
       function onWheel(event) {
@@ -5529,8 +5602,7 @@
       function onPanZoom(event) {
         const { scale, x, y } = event.detail;
         const scaleIsAtStart = scale === 1;
-        const originalSrcThreshold = 2;
-        if (scale === zoomOptions.maxScale || scale > originalSrcThreshold) {
+        if (scale === zoomOptions.maxScale || scale > ORIGINAL_SRC_THRESHOLD) {
           setOriginalSrc();
         }
         toggleImgState(scaleIsAtStart);
@@ -5538,33 +5610,19 @@
           panAndWait(0, 0);
         }
       }
-      const onPanZoomThrottle = 250;
-      let onPanZoomTimeoutId = null;
-      function onPanZoomThrottled(event) {
-        if (onPanZoomTimeoutId) {
-          clearTimeout(onPanZoomTimeoutId);
-        } else {
-          onPanZoom.apply(this, arguments);
-        }
-        onPanZoomTimeoutId = setTimeout(() => {
-          onPanZoom.apply(this, arguments);
-          onPanZoomTimeoutId = null;
-        }, onPanZoomThrottle);
-      }
       function onPanZoomEnd(event) {
         const { scale, x, y } = event.detail;
         constrainPan(scale, x, y);
       }
       on(img, "wheel", onWheel);
-      on(img, "panzoomzoom", onPanZoomThrottled);
+      on(img, "panzoomzoom", throttle(onPanZoom, THROTTLE_DELAY));
       on(img, "panzoomend", onPanZoomEnd);
-      const onZoomIn = onZoom(zoom.zoomIn);
-      const onZoomOut = onZoom(zoom.zoomOut);
-      const onZoomReset = onZoom(zoom.reset, false);
-      on(slide, "zoom.in", onZoomIn);
-      on(slide, "zoom.out", onZoomOut);
-      on(slide, "zoom.reset", onZoomReset);
+      on(slide, "zoom.in", onZoom(zoom.zoomIn));
+      on(slide, "zoom.out", onZoom(zoom.zoomOut));
+      on(slide, "zoom.reset", onZoom(zoom.reset, false));
+      on(slide, "zoom.resize", scaleImgToSlide);
       toggleImgState(true);
+      scaleImgToSlide();
     }
     function createEl(tag, attrs) {
       const el = fragment(`<${tag}>`);
