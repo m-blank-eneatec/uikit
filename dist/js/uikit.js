@@ -5533,6 +5533,27 @@
     };
     const ORIGINAL_SRC_THRESHOLD = 2;
     const THROTTLE_DELAY = 250;
+    function listenForDoubleTap(el, cb, delay = 300) {
+      let lastTapTime = 0;
+      let isMoving = false;
+      element.addEventListener("touchstart", function(event) {
+        const currentTime = performance.now();
+        const tapTime = currentTime - lastTapTime;
+        lastTapTime = currentTime;
+        if (tapTime < delay && tapTime > 0) {
+          if (!isMoving) {
+            cb(event);
+          }
+        }
+      });
+      element.addEventListener("touchmove", function(event) {
+        if (event.touches.length > 1) {
+          isMoving = true;
+        } else {
+          isMoving = false;
+        }
+      });
+    }
     function initZoom(slide, img) {
       if (img.tagName !== "IMG")
         return;
@@ -5567,8 +5588,14 @@
       function onWheel(event) {
         zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
       }
-      function onZoom(func, animate = zoomOptions.animate) {
-        return () => func({ animate });
+      function onZoomIn() {
+        zoom.zoomIn({ step: zoomOptions.step * 2, animate: zoomOptions.animate });
+      }
+      function onZoomOut() {
+        zoom.zoomOut({ step: zoomOptions.step * 2, animate: zoomOptions.animate });
+      }
+      function onZoomReset() {
+        zoom.reset({ animate: false });
       }
       function toggleImgState(scaleIsAtStart) {
         toggleClass(img, zoomOptions.excludeClass, scaleIsAtStart);
@@ -5621,10 +5648,12 @@
       on(img, "wheel", onWheel);
       on(img, "panzoomzoom", throttle(onPanZoom, THROTTLE_DELAY));
       on(img, "panzoomend", onPanZoomEnd);
-      on(slide, "zoom.in", onZoom(zoom.zoomIn));
-      on(slide, "zoom.out", onZoom(zoom.zoomOut));
-      on(slide, "zoom.reset", onZoom(zoom.reset, false));
+      on(slide, "zoom.in", onZoomIn);
+      on(slide, "zoom.out", onZoomOut);
+      on(slide, "zoom.reset", onZoomReset);
       on(slide, "zoom.resize", scaleImgToSlide);
+      on(img, "dblclick", onZoomIn);
+      listenForDoubleTap(img, onZoomIn);
       toggleImgState(true);
       scaleImgToSlide();
     }

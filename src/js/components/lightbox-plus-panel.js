@@ -470,6 +470,34 @@ const ORIGINAL_SRC_THRESHOLD = 2;
 // Throttle expensive event handlers to prevent performance issues
 const THROTTLE_DELAY = 250;
 
+function listenForDoubleTap(el, cb, delay = 300) {
+    let lastTapTime = 0;
+    let isMoving = false;
+
+    element.addEventListener('touchstart', function(event) {
+        const currentTime = performance.now();
+        const tapTime = currentTime - lastTapTime;
+        lastTapTime = currentTime;
+
+        if (tapTime < delay && tapTime > 0) {
+            // Double tap detected
+            if (!isMoving) {
+                // Handle double tap action
+                cb(event);
+            }
+        }
+    });
+
+    element.addEventListener('touchmove', function(event) {
+        if (event.touches.length > 1) {
+            isMoving = true;
+        } else {
+            isMoving = false;
+        }
+    });
+}
+
+
 function initZoom(slide, img) {
     if (img.tagName !== 'IMG') return;
 
@@ -517,9 +545,16 @@ function initZoom(slide, img) {
         zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
     }
 
-    function onZoom(func, animate = zoomOptions.animate) {
-        // Return a function that calls the provided panzoom function
-        return () => func({ animate });
+    function onZoomIn() {
+        zoom.zoomIn({ step: zoomOptions.step*2, animate: zoomOptions.animate });
+    }
+
+    function onZoomOut() {
+        zoom.zoomOut({ step: zoomOptions.step*2, animate: zoomOptions.animate });
+    }
+
+    function onZoomReset() {
+        zoom.reset({ animate: false });
     }
 
     function toggleImgState(scaleIsAtStart) {
@@ -603,10 +638,14 @@ function initZoom(slide, img) {
     on(img, 'panzoomend', onPanZoomEnd);
 
     // Add listeners that are called by the lightbox component
-    on(slide, 'zoom.in', onZoom(zoom.zoomIn));
-    on(slide, 'zoom.out', onZoom(zoom.zoomOut));
-    on(slide, 'zoom.reset', onZoom(zoom.reset, false));
+    on(slide, 'zoom.in', onZoomIn);
+    on(slide, 'zoom.out', onZoomOut);
+    on(slide, 'zoom.reset', onZoomReset);
     on(slide, 'zoom.resize', scaleImgToSlide);
+
+    // On double click / double tap zoom in
+    on(img, 'dblclick', onZoomIn);
+    listenForDoubleTap(img, onZoomIn);
 
     // Add the exclude class to the image in the beginning
     // to allow the user to navigate to the next slide by swiping the image
