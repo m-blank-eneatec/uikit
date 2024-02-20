@@ -416,173 +416,166 @@ export default {
     },
 };
 
+// Options for the Panzoom plugin
+const ZOOM_OPTIONS = {
+    startScale: 1,
+    minScale: 1,
+    maxScale: 3,
+    cursor: 'move',
+    animate: true,
+    origin: '50% 50%',
+    pinchAndPan: true,
+    panOnlyWhenZoomed: true,
+    excludeClass: 'uk-lightbox-plus-zoom-exclude',
+};
+
+// Once the user has zoomed in by this amount, the original image source will be set as the src attribute
+const ORIGINAL_SRC_THRESHOLD = 2;
+
+// Throttle the panzoomchange event handler to prevent performance issues
+const PAN_ZOOM_THROTTLE = 250;
+
 function initZoom(slide, img) {
-    if (img.tagName === 'IMG') {
-        const hasSrcset = hasAttr(img, 'srcset');
-        const originalSrc = attr(img, 'src');
-        const zoomExcludeCls = 'uk-lightbox-plus-zoom-exclude';
-        let hasOriginalSrc = !hasSrcset;
-        let isWaitingForAnimation = false;
+    if (img.tagName !== 'IMG') return;
 
-        // Initialize zoom plugin
-        const zoom = Panzoom(img, {
-            startScale: 1,
-            minScale: 1,
-            maxScale: 3,
-            cursor: 'move',
-            animate: true,
-            origin: '50% 50%',
-            pinchAndPan: true,
-            panOnlyWhenZoomed: true,
-            excludeClass: zoomExcludeCls,
-            setTransform: (elem, { scale, x, y }) => {
-                css(elem, 'transform', `scale(${scale}) translate(${x}px, ${y}px)`);
-            }
-        });
-        const zoomOptions = zoom.getOptions();
+    const hasSrcset = hasAttr(img, 'srcset');
+    const originalSrc = attr(img, 'src');
+    let hasOriginalSrc = !hasSrcset;
+    let isWaitingForAnimation = false;
 
-        function setOriginalSrc() {
-            if (!hasOriginalSrc) {
-                img.src = originalSrc;
-                removeAttr(img, 'srcset');
-                hasOriginalSrc = true;
-            }
+    // Initialize the Panzoom plugin
+    const zoom = Panzoom(img, ZOOM_OPTIONS);
+    const zoomOptions = zoom.getOptions();
+
+    function setOriginalSrc() {
+        if (!hasOriginalSrc) {
+            img.src = originalSrc;
+            removeAttr(img, 'srcset');
+            hasOriginalSrc = true;
         }
-
-        function onWheel(event) {
-            // Enable zooming with mouse
-            zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
-        }
-
-        function onZoomReset() {
-            zoom.reset({ animate: false });
-        }
-
-        function onZoomIn() {
-            zoom.zoomIn({ animate: zoomOptions.animate });
-        }
-
-        function onZoomOut() {
-            zoom.zoomOut({ animate: zoomOptions.animate });
-        }
-
-        function toggleImgState(scaleIsAtStart) {
-            // Toggle the zoomExcludeCls class to the image when zoomed all the way out
-            // to allow the user to navigate to the next slide by swiping the image
-            toggleClass(img, zoomExcludeCls, scaleIsAtStart);
-            css(img, 'cursor', scaleIsAtStart ? 'default' : zoomOptions.cursor);
-        }
-
-        function panAndWait(toX, toY, animate = zoomOptions.animate) {
-            // Prevent another zoom or pan event until the animation is complete
-            // because calling pan() while the animation is running will cause the smooth animation to be interrupted
-            if (!isWaitingForAnimation) {
-                isWaitingForAnimation = true;
-                zoom.setOptions({ disableZoom: true, disablePan: true });
-                zoom.pan(toX, toY, { animate, force: true });
-
-                // Reset settings after the animation is complete
-                setTimeout(() => {
-                    isWaitingForAnimation = false;
-                    zoom.setOptions({ disableZoom: zoomOptions.disableZoom, disablePan: zoomOptions.disablePan });
-                }, zoomOptions.duration);
-            }
-        }
-
-        function clampPanToOffset(value, imgDimension, slideDimension, scale) {
-            // Check if the image is filling the slide in the current axis (vertically or horizontally)
-            const isFillingSlide = imgDimension >= slideDimension;
-            if (isFillingSlide) {
-                // Calculate the maximum offset on the current axis and clamp the value
-                const maxOffset = ((imgDimension - slideDimension) / scale / 2);
-                return clamp(value, -maxOffset, maxOffset);
-            } else {
-                // Center the image on the current axis to create even spacing on both sides
-                return 0;
-            }
-        }
-
-        function constrainPan(scale, x, y, animate = zoomOptions.animate) {
-            // Get the dimensions of the image and the parent slide
-            const { width: imgWidth, height: imgHeight } = dimensions(img);
-            const { width: slideWidth, height: slideHeight } = dimensions(slide);
-
-            // Clamp the x and y values
-            const clampedX = clampPanToOffset(x, imgWidth, slideWidth, scale);
-            const clampedY = clampPanToOffset(y, imgHeight, slideHeight, scale);
-
-            if (x !== clampedX || y !== clampedY) {
-                // Pan the image to the clamped position
-                panAndWait(clampedX, clampedY, animate);
-            }
-        }
-
-        function onPanZoom(event) {
-            const { scale, x, y } = event.detail;
-            const scaleIsAtStart = (scale === 1);
-
-            // Change src to high resolution image when zoomed in
-            const originalSrcThreshold = 2; // 2x zoom
-            if ((scale === zoomOptions.maxScale) || (scale > originalSrcThreshold)) {
-                setOriginalSrc();
-            }
-
-            // Toggle the zoomExcludeCls class to the image when zoomed all the way out
-            // to allow the user to navigate to the next slide by swiping the image
-            toggleImgState(scaleIsAtStart);
-
-            // Reset pan position back to the center
-            if (scaleIsAtStart) {
-                panAndWait(0, 0);
-            }
-        }
-
-        // Throttle the panzoomchange event handler to prevent performance issues
-        const onPanZoomThrottle = 250;
-        let onPanZoomTimeoutId = null;
-        function onPanZoomThrottled(event) {
-            if (onPanZoomTimeoutId) {
-                // Clear the previous timeout and start a new one
-                clearTimeout(onPanZoomTimeoutId);
-            } else {
-                // No active timeout => call the event handler immediately
-                onPanZoom.apply(this, arguments);
-            }
-
-            onPanZoomTimeoutId = setTimeout(() => {
-                onPanZoom.apply(this, arguments);
-                onPanZoomTimeoutId = null;
-
-            }, onPanZoomThrottle);
-        }
-
-        function onPanZoomEnd(event) {
-            const { scale, x, y } = event.detail;
-            constrainPan(scale, x, y);
-        }
-
-        function addListenersAndInitializeZoom() {
-            // Listen for wheel event to detect zooming
-            on(img, 'wheel', onWheel);
-
-            // Listen for the reset event and
-            // keyboard events using the + and - keys
-            on(slide, 'zoom.reset', onZoomReset);
-            on(slide, 'zoom.in', onZoomIn);
-            on(slide, 'zoom.out', onZoomOut);
-
-            // Listen for zoom events
-            on(img, 'panzoomzoom', onPanZoomThrottled);
-            on(img, 'panzoomend', onPanZoomEnd);
-        }
-
-        // Add listeners and initialize zoom
-        addListenersAndInitializeZoom();
-
-        // Add the zoomExcludeCls class to the image in the beginning
-        // to allow the user to navigate to the next slide by swiping the image
-        toggleImgState(true);
     }
+
+    function onWheel(event) {
+        // Enable zooming with mouse
+        zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
+    }
+
+    function onZoom(func, animate = zoomOptions.animate) {
+        // Return a function that calls the provided panzoom function
+        return () => func({ animate });
+    }
+
+    function toggleImgState(scaleIsAtStart) {
+        // Toggle the exclude class to the image when zoomed all the way out
+        // to allow the user to navigate to the next slide by swiping the image
+        toggleClass(img, zoomOptions.excludeClass, scaleIsAtStart);
+        css(img, 'cursor', scaleIsAtStart ? 'default' : zoomOptions.cursor);
+    }
+
+    function panAndWait(toX, toY, animate = zoomOptions.animate) {
+        // Prevent another zoom or pan event until the animation is complete
+        // because calling pan() while the animation is running will cause the smooth animation to be interrupted
+        if (!isWaitingForAnimation) {
+            isWaitingForAnimation = true;
+            zoom.setOptions({ disableZoom: true, disablePan: true });
+            zoom.pan(toX, toY, { animate, force: true });
+
+            // Reset settings after the animation is complete
+            setTimeout(() => {
+                isWaitingForAnimation = false;
+                zoom.setOptions({ disableZoom: zoomOptions.disableZoom, disablePan: zoomOptions.disablePan });
+            }, zoomOptions.duration);
+        }
+    }
+
+    function clampPanToOffset(value, imgDimension, slideDimension, scale) {
+        // Check if the image is filling the slide in the current axis (vertically or horizontally)
+        const isFillingSlide = imgDimension >= slideDimension;
+        if (isFillingSlide) {
+            // Calculate the maximum offset on the current axis and clamp the value
+            const maxOffset = ((imgDimension - slideDimension) / scale / 2);
+            return clamp(value, -maxOffset, maxOffset);
+        } else {
+            // Center the image on the current axis to create even spacing on both sides
+            return 0;
+        }
+    }
+
+    function constrainPan(scale, x, y, animate = zoomOptions.animate) {
+        // Get the dimensions of the image and the parent slide
+        const { width: imgWidth, height: imgHeight } = dimensions(img);
+        const { width: slideWidth, height: slideHeight } = dimensions(slide);
+
+        // Clamp the x and y values
+        const clampedX = clampPanToOffset(x, imgWidth, slideWidth, scale);
+        const clampedY = clampPanToOffset(y, imgHeight, slideHeight, scale);
+
+        if (x !== clampedX || y !== clampedY) {
+            // Pan the image to the clamped position
+            panAndWait(clampedX, clampedY, animate);
+        }
+    }
+
+    function onPanZoom(event) {
+        const { scale, x, y } = event.detail;
+        const scaleIsAtStart = (scale === 1);
+
+        // Change src to high resolution image when zoomed in
+        const originalSrcThreshold = 2; // 2x zoom
+        if ((scale === zoomOptions.maxScale) || (scale > originalSrcThreshold)) {
+            setOriginalSrc();
+        }
+
+        // Toggle the exclude class to the image when zoomed all the way out
+        // to allow the user to navigate to the next slide by swiping the image
+        toggleImgState(scaleIsAtStart);
+
+        // Reset pan position back to the center
+        if (scaleIsAtStart) {
+            panAndWait(0, 0);
+        }
+    }
+
+    // Throttle the panzoomchange event handler to prevent performance issues
+    const onPanZoomThrottle = 250;
+    let onPanZoomTimeoutId = null;
+    function onPanZoomThrottled(event) {
+        if (onPanZoomTimeoutId) {
+            // Clear the previous timeout and start a new one
+            clearTimeout(onPanZoomTimeoutId);
+        } else {
+            // No active timeout => call the event handler immediately
+            onPanZoom.apply(this, arguments);
+        }
+
+        onPanZoomTimeoutId = setTimeout(() => {
+            onPanZoom.apply(this, arguments);
+            onPanZoomTimeoutId = null;
+
+        }, onPanZoomThrottle);
+    }
+
+    function onPanZoomEnd(event) {
+        const { scale, x, y } = event.detail;
+        constrainPan(scale, x, y);
+    }
+
+    // Add listeners
+    on(img, 'wheel', onWheel);
+    on(img, 'panzoomzoom', onPanZoomThrottled);
+    on(img, 'panzoomend', onPanZoomEnd);
+
+    // Add listeners that are called by the lightbox component
+    const onZoomIn = onZoom(zoom.zoomIn);
+    const onZoomOut = onZoom(zoom.zoomOut);
+    const onZoomReset = onZoom(zoom.reset, false);
+    on(slide, 'zoom.in', onZoomIn);
+    on(slide, 'zoom.out', onZoomOut);
+    on(slide, 'zoom.reset', onZoomReset);
+
+    // Add the exclude class to the image in the beginning
+    // to allow the user to navigate to the next slide by swiping the image
+    toggleImgState(true);
 }
 
 function createEl(tag, attrs) {

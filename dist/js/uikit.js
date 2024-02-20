@@ -5460,108 +5460,111 @@
         }
       }
     };
+    const ZOOM_OPTIONS = {
+      startScale: 1,
+      minScale: 1,
+      maxScale: 3,
+      cursor: "move",
+      animate: true,
+      origin: "50% 50%",
+      pinchAndPan: true,
+      panOnlyWhenZoomed: true,
+      excludeClass: "uk-lightbox-plus-zoom-exclude"
+    };
     function initZoom(slide, img) {
-      if (img.tagName === "IMG") {
-        let setOriginalSrc = function() {
-          if (!hasOriginalSrc) {
-            img.src = originalSrc;
-            removeAttr(img, "srcset");
-            hasOriginalSrc = true;
-          }
-        }, onWheel = function(event) {
-          zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
-        }, onZoomReset = function() {
-          zoom.reset({ animate: false });
-        }, onZoomIn = function() {
-          zoom.zoomIn({ animate: zoomOptions.animate });
-        }, onZoomOut = function() {
-          zoom.zoomOut({ animate: zoomOptions.animate });
-        }, toggleImgState = function(scaleIsAtStart) {
-          toggleClass(img, zoomExcludeCls, scaleIsAtStart);
-          css(img, "cursor", scaleIsAtStart ? "default" : zoomOptions.cursor);
-        }, panAndWait = function(toX, toY, animate = zoomOptions.animate) {
-          if (!isWaitingForAnimation) {
-            isWaitingForAnimation = true;
-            zoom.setOptions({ disableZoom: true, disablePan: true });
-            zoom.pan(toX, toY, { animate, force: true });
-            setTimeout(() => {
-              isWaitingForAnimation = false;
-              zoom.setOptions({ disableZoom: zoomOptions.disableZoom, disablePan: zoomOptions.disablePan });
-            }, zoomOptions.duration);
-          }
-        }, clampPanToOffset = function(value, imgDimension, slideDimension, scale) {
-          const isFillingSlide = imgDimension >= slideDimension;
-          if (isFillingSlide) {
-            const maxOffset = (imgDimension - slideDimension) / scale / 2;
-            return clamp(value, -maxOffset, maxOffset);
-          } else {
-            return 0;
-          }
-        }, constrainPan = function(scale, x, y, animate = zoomOptions.animate) {
-          const { width: imgWidth, height: imgHeight } = dimensions$1(img);
-          const { width: slideWidth, height: slideHeight } = dimensions$1(slide);
-          const clampedX = clampPanToOffset(x, imgWidth, slideWidth, scale);
-          const clampedY = clampPanToOffset(y, imgHeight, slideHeight, scale);
-          if (x !== clampedX || y !== clampedY) {
-            panAndWait(clampedX, clampedY, animate);
-          }
-        }, onPanZoom = function(event) {
-          const { scale, x, y } = event.detail;
-          const scaleIsAtStart = scale === 1;
-          const originalSrcThreshold = 2;
-          if (scale === zoomOptions.maxScale || scale > originalSrcThreshold) {
-            setOriginalSrc();
-          }
-          toggleImgState(scaleIsAtStart);
-          if (scaleIsAtStart) {
-            panAndWait(0, 0);
-          }
-        }, onPanZoomThrottled = function(event) {
-          if (onPanZoomTimeoutId) {
-            clearTimeout(onPanZoomTimeoutId);
-          } else {
-            onPanZoom.apply(this, arguments);
-          }
-          onPanZoomTimeoutId = setTimeout(() => {
-            onPanZoom.apply(this, arguments);
-            onPanZoomTimeoutId = null;
-          }, onPanZoomThrottle);
-        }, onPanZoomEnd = function(event) {
-          const { scale, x, y } = event.detail;
-          constrainPan(scale, x, y);
-        }, addListenersAndInitializeZoom = function() {
-          on(img, "wheel", onWheel);
-          on(slide, "zoom.reset", onZoomReset);
-          on(slide, "zoom.in", onZoomIn);
-          on(slide, "zoom.out", onZoomOut);
-          on(img, "panzoomzoom", onPanZoomThrottled);
-          on(img, "panzoomend", onPanZoomEnd);
-        };
-        const hasSrcset = hasAttr(img, "srcset");
-        const originalSrc = attr(img, "src");
-        const zoomExcludeCls = "uk-lightbox-plus-zoom-exclude";
-        let hasOriginalSrc = !hasSrcset;
-        let isWaitingForAnimation = false;
-        const zoom = Panzoom(img, {
-          startScale: 1,
-          minScale: 1,
-          maxScale: 3,
-          cursor: "move",
-          animate: true,
-          origin: "50% 50%",
-          pinchAndPan: true,
-          panOnlyWhenZoomed: true,
-          excludeClass: zoomExcludeCls,
-          setTransform: (elem, { scale, x, y }) => {
-            css(elem, "transform", `scale(${scale}) translate(${x}px, ${y}px)`);
-          }
-        });
-        const zoomOptions = zoom.getOptions();
-        const onPanZoomThrottle = 250;
-        let onPanZoomTimeoutId = null;
-        addListenersAndInitializeZoom();
-        toggleImgState(true);
+      if (img.tagName !== "IMG")
+        return;
+      const hasSrcset = hasAttr(img, "srcset");
+      const originalSrc = attr(img, "src");
+      let hasOriginalSrc = !hasSrcset;
+      let isWaitingForAnimation = false;
+      const zoom = Panzoom(img, ZOOM_OPTIONS);
+      const zoomOptions = zoom.getOptions();
+      function setOriginalSrc() {
+        if (!hasOriginalSrc) {
+          img.src = originalSrc;
+          removeAttr(img, "srcset");
+          hasOriginalSrc = true;
+        }
       }
+      function onWheel(event) {
+        zoom.zoomWithWheel(event, { animate: zoomOptions.animate });
+      }
+      function onZoom(func, animate = zoomOptions.animate) {
+        return () => func({ animate });
+      }
+      function toggleImgState(scaleIsAtStart) {
+        toggleClass(img, zoomOptions.excludeClass, scaleIsAtStart);
+        css(img, "cursor", scaleIsAtStart ? "default" : zoomOptions.cursor);
+      }
+      function panAndWait(toX, toY, animate = zoomOptions.animate) {
+        if (!isWaitingForAnimation) {
+          isWaitingForAnimation = true;
+          zoom.setOptions({ disableZoom: true, disablePan: true });
+          zoom.pan(toX, toY, { animate, force: true });
+          setTimeout(() => {
+            isWaitingForAnimation = false;
+            zoom.setOptions({ disableZoom: zoomOptions.disableZoom, disablePan: zoomOptions.disablePan });
+          }, zoomOptions.duration);
+        }
+      }
+      function clampPanToOffset(value, imgDimension, slideDimension, scale) {
+        const isFillingSlide = imgDimension >= slideDimension;
+        if (isFillingSlide) {
+          const maxOffset = (imgDimension - slideDimension) / scale / 2;
+          return clamp(value, -maxOffset, maxOffset);
+        } else {
+          return 0;
+        }
+      }
+      function constrainPan(scale, x, y, animate = zoomOptions.animate) {
+        const { width: imgWidth, height: imgHeight } = dimensions$1(img);
+        const { width: slideWidth, height: slideHeight } = dimensions$1(slide);
+        const clampedX = clampPanToOffset(x, imgWidth, slideWidth, scale);
+        const clampedY = clampPanToOffset(y, imgHeight, slideHeight, scale);
+        if (x !== clampedX || y !== clampedY) {
+          panAndWait(clampedX, clampedY, animate);
+        }
+      }
+      function onPanZoom(event) {
+        const { scale, x, y } = event.detail;
+        const scaleIsAtStart = scale === 1;
+        const originalSrcThreshold = 2;
+        if (scale === zoomOptions.maxScale || scale > originalSrcThreshold) {
+          setOriginalSrc();
+        }
+        toggleImgState(scaleIsAtStart);
+        if (scaleIsAtStart) {
+          panAndWait(0, 0);
+        }
+      }
+      const onPanZoomThrottle = 250;
+      let onPanZoomTimeoutId = null;
+      function onPanZoomThrottled(event) {
+        if (onPanZoomTimeoutId) {
+          clearTimeout(onPanZoomTimeoutId);
+        } else {
+          onPanZoom.apply(this, arguments);
+        }
+        onPanZoomTimeoutId = setTimeout(() => {
+          onPanZoom.apply(this, arguments);
+          onPanZoomTimeoutId = null;
+        }, onPanZoomThrottle);
+      }
+      function onPanZoomEnd(event) {
+        const { scale, x, y } = event.detail;
+        constrainPan(scale, x, y);
+      }
+      on(img, "wheel", onWheel);
+      on(img, "panzoomzoom", onPanZoomThrottled);
+      on(img, "panzoomend", onPanZoomEnd);
+      const onZoomIn = onZoom(zoom.zoomIn);
+      const onZoomOut = onZoom(zoom.zoomOut);
+      const onZoomReset = onZoom(zoom.reset, false);
+      on(slide, "zoom.in", onZoomIn);
+      on(slide, "zoom.out", onZoomOut);
+      on(slide, "zoom.reset", onZoomReset);
+      toggleImgState(true);
     }
     function createEl(tag, attrs) {
       const el = fragment(`<${tag}>`);
