@@ -5228,9 +5228,16 @@
         videoAutoplay: false,
         delayControls: 3e3,
         zoomImages: true,
+        originalImageSrcThreshold: 2,
+        // Once the user has zoomed in by this amount, the original image source will be set as the src attribute
+        throttleDelay: 250,
+        // Throttle expensive event handlers to prevent performance issues
         items: [],
         cls: "uk-open",
         clsPage: "uk-lightbox-plus-page",
+        clsPanDisabled: "uk-lightbox-plus-pan-disabled",
+        clsSwipeDisabled: "uk-lightbox-plus-swipe-disabled",
+        clsImage: "uk-lightbox-plus-image",
         selList: ".uk-lightbox-plus-items",
         attrItem: "uk-lightbox-plus-item",
         selClose: ".uk-close-large",
@@ -5253,7 +5260,20 @@
         this.$mount(append(this.container, $el));
       },
       computed: {
-        caption: ({ selCaption }, $el) => $(selCaption, $el)
+        caption: ({ selCaption }, $el) => $(selCaption, $el),
+        zoomOptions({ clsPanDisabled }) {
+          return {
+            startScale: 1,
+            minScale: 1,
+            maxScale: 3,
+            cursor: "move",
+            animate: true,
+            origin: "50% 50%",
+            pinchAndPan: true,
+            panOnlyWhenZoomed: true,
+            excludeClass: clsPanDisabled
+          };
+        }
       },
       events: [
         {
@@ -5286,12 +5306,14 @@
                 return;
               }
               if (this.zoomImages) {
-                const item = this.getItem();
-                const slide = this.getSlide(item);
-                trigger(slide, "zoom.resize");
+                const slide = this.getSlide(this.index);
+                const img = $(`.${this.clsImage}`, slide);
+                if (img) {
+                  scaleImgToSlide(slide, img);
+                }
               }
             };
-            observeViewportResize(throttle(onResizeHandler, THROTTLE_DELAY));
+            observeViewportResize(throttle(onResizeHandler, this.throttleDelay));
           }
         },
         {
@@ -5319,8 +5341,7 @@
             }
             const { key } = event;
             if (this.zoomImages) {
-              const item = this.getItem();
-              const slide = this.getSlide(item);
+              const slide = this.getSlide(this.index);
               if (key === "+") {
                 trigger(slide, "zoom.in");
               } else if (key === "-") {
@@ -5370,11 +5391,12 @@
           handler() {
             const item = this.getItem();
             const slide = this.getSlide(item);
+            const img = $(`.${this.clsImage}`, slide);
             html(this.caption, item.caption || "");
             if (!slide.childElementCount) {
               this.loadItem(this.index);
-            } else {
-              trigger(slide, "zoom.resize");
+            } else if (img) {
+              scaleImgToSlide(slide, img);
             }
             setTimeout(() => {
               for (let j = 0; j <= this.preload; j++) {
@@ -5387,7 +5409,7 @@
         {
           name: "itemshown",
           handler() {
-            this.draggable = this.$props.draggable;
+            setDraggableState(this);
           }
         },
         {
@@ -5400,10 +5422,11 @@
         },
         {
           name: "itemloaded",
-          handler(_, __, slide, item) {
-            if (slide && item) {
-              if (item.tagName === "IMG" && this.zoomImages) {
-                initZoom(slide, item);
+          handler(_, __, slide) {
+            if (slide) {
+              const img = $(`.${this.clsImage}`, slide);
+              if (img && this.zoomImages) {
+                initZoom(this, slide, img, this.zoomOptions);
               }
             }
           }
@@ -5424,11 +5447,11 @@
               "uk-video": `${this.videoAutoplay}`
             };
             if (srcset) {
-              const img = createEl("img", { src, srcset, alt, ...attrs });
+              const img = createEl("img", { src, srcset, class: this.clsImage, alt, ...attrs });
               once(img, "load", () => this.setItem(item, img));
               on(img, "error", () => this.setError(item));
             } else if (type === "image" || src.match(/\.(avif|jpe?g|jfif|a?png|gif|svg|webp)($|\?)/i)) {
-              const img = createEl("img", { src, alt, ...attrs });
+              const img = createEl("img", { src, class: this.clsImage, alt, ...attrs });
               on(img, "load", () => this.setItem(item, img));
               on(img, "error", () => this.setError(item));
             } else if (type === "video" || src.match(/\.(mp4|webm|ogv)($|\?)/i)) {
@@ -5520,23 +5543,10 @@
         }
       }
     };
-    const ZOOM_OPTIONS = {
-      startScale: 1,
-      minScale: 1,
-      maxScale: 3,
-      cursor: "move",
-      animate: true,
-      origin: "50% 50%",
-      pinchAndPan: true,
-      panOnlyWhenZoomed: true,
-      excludeClass: "uk-lightbox-plus-zoom-exclude"
-    };
-    const ORIGINAL_SRC_THRESHOLD = 2;
-    const THROTTLE_DELAY = 250;
     function listenForDoubleTap(el, cb, delay = 300) {
       let lastTapTime = 0;
       let isMoving = false;
-      element.addEventListener("touchstart", function(event) {
+      el.addEventListener("touchstart", function(event) {
         const currentTime = performance.now();
         const tapTime = currentTime - lastTapTime;
         lastTapTime = currentTime;
@@ -5546,7 +5556,7 @@
           }
         }
       });
-      element.addEventListener("touchmove", function(event) {
+      el.addEventListener("touchmove", function(event) {
         if (event.touches.length > 1) {
           isMoving = true;
         } else {
@@ -5554,35 +5564,46 @@
         }
       });
     }
-    function initZoom(slide, img) {
+    function scaleImgToSlide(slide, img) {
+      css(img, "height", "auto");
+      css(img, "width", "auto");
+      const { width: imgWidth, height: imgHeight } = dimensions$1(img);
+      const { width: slideWidth, height: slideHeight } = dimensions$1(slide);
+      if (imgWidth === 0 || imgHeight === 0)
+        return;
+      const imgAspectRatio = imgWidth / imgHeight;
+      const slideAspectRatio = slideWidth / slideHeight;
+      if (imgAspectRatio > slideAspectRatio) {
+        css(img, "width", "100%");
+      } else {
+        css(img, "height", "100%");
+      }
+    }
+    function setDraggableState(lightbox) {
+      let draggable = lightbox.$props.draggable;
+      if (draggable) {
+        const slide = lightbox.getSlide(lightbox.index);
+        const img = $(`.${lightbox.clsImage}`, slide);
+        if (img) {
+          draggable = !hasClass$1(img, lightbox.clsSwipeDisabled);
+        }
+      }
+      lightbox.draggable = draggable;
+    }
+    function initZoom(lightbox, slide, img, options) {
       if (img.tagName !== "IMG")
         return;
       const hasSrcset = hasAttr(img, "srcset");
       const originalSrc = attr(img, "src");
       let hasOriginalSrc = !hasSrcset;
       let isWaitingForAnimation = false;
-      const zoom = Panzoom(img, ZOOM_OPTIONS);
+      const zoom = Panzoom(img, options);
       const zoomOptions = zoom.getOptions();
       function setOriginalSrc() {
         if (!hasOriginalSrc) {
           img.src = originalSrc;
           removeAttr(img, "srcset");
           hasOriginalSrc = true;
-        }
-      }
-      function scaleImgToSlide() {
-        css(img, "height", "auto");
-        css(img, "width", "auto");
-        const { width: imgWidth, height: imgHeight } = dimensions$1(img);
-        const { width: slideWidth, height: slideHeight } = dimensions$1(slide);
-        if (imgWidth === 0 || imgHeight === 0)
-          return;
-        const imgAspectRatio = imgWidth / imgHeight;
-        const slideAspectRatio = slideWidth / slideHeight;
-        if (imgAspectRatio > slideAspectRatio) {
-          css(img, "width", "100%");
-        } else {
-          css(img, "height", "100%");
         }
       }
       function onWheel(event) {
@@ -5597,9 +5618,11 @@
       function onZoomReset() {
         zoom.reset({ animate: false });
       }
-      function toggleImgState(scaleIsAtStart) {
-        toggleClass(img, zoomOptions.excludeClass, scaleIsAtStart);
-        css(img, "cursor", scaleIsAtStart ? "default" : zoomOptions.cursor);
+      function toggleImgZoomedCls(hasZoomed) {
+        toggleClass(img, lightbox.clsPanDisabled, !hasZoomed);
+        toggleClass(img, lightbox.clsSwipeDisabled, hasZoomed);
+        css(img, "cursor", hasZoomed ? zoomOptions.cursor : "default");
+        setDraggableState(lightbox);
       }
       function panAndWait(toX, toY, animate = zoomOptions.animate) {
         if (!isWaitingForAnimation) {
@@ -5631,13 +5654,13 @@
         }
       }
       function onPanZoom(event) {
-        const { scale, x, y } = event.detail;
-        const scaleIsAtStart = scale === 1;
-        if (scale === zoomOptions.maxScale || scale > ORIGINAL_SRC_THRESHOLD) {
+        const { scale } = event.detail;
+        const hasZoomed = scale > 1;
+        if (scale === zoomOptions.maxScale || scale > lightbox.originalImageSrcThreshold) {
           setOriginalSrc();
         }
-        toggleImgState(scaleIsAtStart);
-        if (scaleIsAtStart) {
+        toggleImgZoomedCls(hasZoomed);
+        if (!hasZoomed) {
           panAndWait(0, 0);
         }
       }
@@ -5646,16 +5669,15 @@
         constrainPan(scale, x, y);
       }
       on(img, "wheel", onWheel);
-      on(img, "panzoomzoom", throttle(onPanZoom, THROTTLE_DELAY));
+      on(img, "panzoomzoom", throttle(onPanZoom, lightbox.throttleDelay));
       on(img, "panzoomend", onPanZoomEnd);
       on(slide, "zoom.in", onZoomIn);
       on(slide, "zoom.out", onZoomOut);
       on(slide, "zoom.reset", onZoomReset);
-      on(slide, "zoom.resize", scaleImgToSlide);
       on(img, "dblclick", onZoomIn);
       listenForDoubleTap(img, onZoomIn);
-      toggleImgState(true);
-      scaleImgToSlide();
+      toggleImgZoomedCls(false);
+      scaleImgToSlide(slide, img);
     }
     function createEl(tag, attrs) {
       const el = fragment(`<${tag}>`);

@@ -9,6 +9,7 @@ import {
     fragment,
     getIndex,
     hasAttr,
+    hasClass,
     hasTouch,
     html,
     observeViewportResize,
@@ -47,9 +48,14 @@ export default {
         videoAutoplay: false,
         delayControls: 3000,
         zoomImages: true,
+        originalImageSrcThreshold: 2, // Once the user has zoomed in by this amount, the original image source will be set as the src attribute
+        throttleDelay: 250, // Throttle expensive event handlers to prevent performance issues
         items: [],
         cls: 'uk-open',
         clsPage: 'uk-lightbox-plus-page',
+        clsPanDisabled: 'uk-lightbox-plus-pan-disabled',
+        clsSwipeDisabled: 'uk-lightbox-plus-swipe-disabled',
+        clsImage: 'uk-lightbox-plus-image',
         selList: '.uk-lightbox-plus-items',
         attrItem: 'uk-lightbox-plus-item',
         selClose: '.uk-close-large',
@@ -85,6 +91,21 @@ export default {
 
     computed: {
         caption: ({ selCaption }, $el) => $(selCaption, $el),
+
+        zoomOptions({ clsPanDisabled }) {
+            // Options for the Panzoom plugin
+            return {
+                startScale: 1,
+                minScale: 1,
+                maxScale: 3,
+                cursor: 'move',
+                animate: true,
+                origin: '50% 50%',
+                pinchAndPan: true,
+                panOnlyWhenZoomed: true,
+                excludeClass: clsPanDisabled
+            };
+        }
     },
 
     events: [
@@ -130,14 +151,16 @@ export default {
                     }
 
                     if (this.zoomImages) {
-                        // Trigger a resize event
-                        const item = this.getItem();
-                        const slide = this.getSlide(item);
-                        trigger(slide, 'zoom.resize');
+                        const slide = this.getSlide(this.index);
+                        const img = $(`.${this.clsImage}`, slide);
+
+                        if (img) {
+                            scaleImgToSlide(slide, img);
+                        }
                     }
                 };
 
-                observeViewportResize(throttle(onResizeHandler, THROTTLE_DELAY));
+                observeViewportResize(throttle(onResizeHandler, this.throttleDelay));
             },
         },
 
@@ -178,8 +201,7 @@ export default {
 
                 if (this.zoomImages) {
                     // Trigger a zoom event via keyboard
-                    const item = this.getItem();
-                    const slide = this.getSlide(item);
+                    const slide = this.getSlide(this.index);
 
                     if (key === '+') {
                         trigger(slide, 'zoom.in');
@@ -244,15 +266,15 @@ export default {
             handler() {
                 const item = this.getItem();
                 const slide = this.getSlide(item);
+                const img = $(`.${this.clsImage}`, slide);
 
                 html(this.caption, item.caption || '');
 
                 if (!slide.childElementCount) {
                     // Preload this item first
                     this.loadItem(this.index);
-                } else {
-                    // Trigger a resize event
-                    trigger(slide, 'zoom.resize');
+                } else if (img) {
+                    scaleImgToSlide(slide, img);
                 }
 
                 // Preload next and previous items as well after a short delay
@@ -269,7 +291,7 @@ export default {
             name: 'itemshown',
 
             handler() {
-                this.draggable = this.$props.draggable;
+                setDraggableState(this);
             },
         },
 
@@ -287,10 +309,11 @@ export default {
         {
             name: 'itemloaded',
 
-            handler(_, __, slide, item) {
-                if (slide && item) {
-                    if (item.tagName === 'IMG' && this.zoomImages) {
-                        initZoom(slide, item);
+            handler(_, __, slide) {
+                if (slide) {
+                    const img = $(`.${this.clsImage}`, slide);
+                    if (img && this.zoomImages) {
+                        initZoom(this, slide, img, this.zoomOptions);
                     }
                 }
             },
@@ -320,7 +343,7 @@ export default {
                 if (
                     srcset
                 ) {
-                    const img = createEl('img', { src, srcset, alt, ...attrs });
+                    const img = createEl('img', { src, srcset, class: this.clsImage, alt, ...attrs });
                     // Only listen to 'load' once, because we will replace the srcset later on
                     // and do not want to trigger the event handler again
                     once(img, 'load', () => this.setItem(item, img));
@@ -331,7 +354,7 @@ export default {
                     type === 'image' ||
                     src.match(/\.(avif|jpe?g|jfif|a?png|gif|svg|webp)($|\?)/i)
                 ) {
-                    const img = createEl('img', { src, alt, ...attrs });
+                    const img = createEl('img', { src, class: this.clsImage, alt, ...attrs });
                     on(img, 'load', () => this.setItem(item, img));
                     on(img, 'error', () => this.setError(item));
 
@@ -451,30 +474,11 @@ export default {
     },
 };
 
-// Options for the Panzoom plugin
-const ZOOM_OPTIONS = {
-    startScale: 1,
-    minScale: 1,
-    maxScale: 3,
-    cursor: 'move',
-    animate: true,
-    origin: '50% 50%',
-    pinchAndPan: true,
-    panOnlyWhenZoomed: true,
-    excludeClass: 'uk-lightbox-plus-zoom-exclude',
-};
-
-// Once the user has zoomed in by this amount, the original image source will be set as the src attribute
-const ORIGINAL_SRC_THRESHOLD = 2;
-
-// Throttle expensive event handlers to prevent performance issues
-const THROTTLE_DELAY = 250;
-
 function listenForDoubleTap(el, cb, delay = 300) {
     let lastTapTime = 0;
     let isMoving = false;
 
-    element.addEventListener('touchstart', function(event) {
+    el.addEventListener('touchstart', function(event) {
         const currentTime = performance.now();
         const tapTime = currentTime - lastTapTime;
         lastTapTime = currentTime;
@@ -488,7 +492,7 @@ function listenForDoubleTap(el, cb, delay = 300) {
         }
     });
 
-    element.addEventListener('touchmove', function(event) {
+    el.addEventListener('touchmove', function(event) {
         if (event.touches.length > 1) {
             isMoving = true;
         } else {
@@ -497,8 +501,45 @@ function listenForDoubleTap(el, cb, delay = 300) {
     });
 }
 
+function scaleImgToSlide(slide, img) {
+    // Reset the image to its original size and position
+    css(img, 'height', 'auto');
+    css(img, 'width', 'auto');
 
-function initZoom(slide, img) {
+    // The image should fill out the parent slide without cropping or stretching
+    const { width: imgWidth, height: imgHeight } = dimensions(img);
+    const { width: slideWidth, height: slideHeight } = dimensions(slide);
+
+    // Stop if the image has no dimensions yet
+    if (imgWidth === 0 || imgHeight === 0) return;
+
+    const imgAspectRatio = imgWidth / imgHeight;
+    const slideAspectRatio = slideWidth / slideHeight;
+
+    if (imgAspectRatio > slideAspectRatio) {
+        css(img, 'width', '100%');
+    } else {
+        css(img, 'height', '100%');
+    }
+}
+
+function setDraggableState(lightbox) {
+    let draggable = lightbox.$props.draggable;;
+
+    if (draggable) {
+        const slide = lightbox.getSlide(lightbox.index);
+        const img = $(`.${lightbox.clsImage}`, slide);
+
+        if (img) {
+            // Disable dragging the lightbox when the current image is zoomed in
+            draggable = !hasClass(img, lightbox.clsSwipeDisabled);
+        }
+    }
+
+    lightbox.draggable = draggable;
+}
+
+function initZoom(lightbox, slide, img, options) {
     if (img.tagName !== 'IMG') return;
 
     const hasSrcset = hasAttr(img, 'srcset');
@@ -507,7 +548,7 @@ function initZoom(slide, img) {
     let isWaitingForAnimation = false;
 
     // Initialize the Panzoom plugin
-    const zoom = Panzoom(img, ZOOM_OPTIONS);
+    const zoom = Panzoom(img, options);
     const zoomOptions = zoom.getOptions();
 
     function setOriginalSrc() {
@@ -515,28 +556,6 @@ function initZoom(slide, img) {
             img.src = originalSrc;
             removeAttr(img, 'srcset');
             hasOriginalSrc = true;
-        }
-    }
-
-    function scaleImgToSlide() {
-        // Reset the image to its original size and position
-        css(img, 'height', 'auto');
-        css(img, 'width', 'auto');
-
-        // The image should fill out the parent slide without cropping or stretching
-        const { width: imgWidth, height: imgHeight } = dimensions(img);
-        const { width: slideWidth, height: slideHeight } = dimensions(slide);
-
-        // Stop if the image has no dimensions yet
-        if (imgWidth === 0 || imgHeight === 0) return;
-
-        const imgAspectRatio = imgWidth / imgHeight;
-        const slideAspectRatio = slideWidth / slideHeight;
-
-        if (imgAspectRatio > slideAspectRatio) {
-            css(img, 'width', '100%');
-        } else {
-            css(img, 'height', '100%');
         }
     }
 
@@ -557,11 +576,19 @@ function initZoom(slide, img) {
         zoom.reset({ animate: false });
     }
 
-    function toggleImgState(scaleIsAtStart) {
-        // Toggle the exclude class to the image when zoomed all the way out
+    function toggleImgZoomedCls(hasZoomed) {
+        // Disable panning when the image is zoomed all the way out,
         // to allow the user to navigate to the next slide by swiping the image
-        toggleClass(img, zoomOptions.excludeClass, scaleIsAtStart);
-        css(img, 'cursor', scaleIsAtStart ? 'default' : zoomOptions.cursor);
+        toggleClass(img, lightbox.clsPanDisabled, !hasZoomed);
+
+        // Disable swiping when the image is zoomed in,
+        // to allow the user to pan the image
+        toggleClass(img, lightbox.clsSwipeDisabled, hasZoomed);
+
+        // Set appropriate cursor style
+        css(img, 'cursor', hasZoomed ? zoomOptions.cursor : 'default');
+
+        setDraggableState(lightbox);
     }
 
     function panAndWait(toX, toY, animate = zoomOptions.animate) {
@@ -609,20 +636,20 @@ function initZoom(slide, img) {
     }
 
     function onPanZoom(event) {
-        const { scale, x, y } = event.detail;
-        const scaleIsAtStart = (scale === 1);
+        const { scale } = event.detail;
+        const hasZoomed = (scale > 1);
 
         // Change src to high resolution image when zoomed in
-        if ((scale === zoomOptions.maxScale) || (scale > ORIGINAL_SRC_THRESHOLD)) {
+        if ((scale === zoomOptions.maxScale) || (scale > lightbox.originalImageSrcThreshold)) {
             setOriginalSrc();
         }
 
         // Toggle the exclude class to the image when zoomed all the way out
         // to allow the user to navigate to the next slide by swiping the image
-        toggleImgState(scaleIsAtStart);
+        toggleImgZoomedCls(hasZoomed);
 
         // Reset pan position back to the center
-        if (scaleIsAtStart) {
+        if (!hasZoomed) {
             panAndWait(0, 0);
         }
     }
@@ -634,25 +661,24 @@ function initZoom(slide, img) {
 
     // Add listeners
     on(img, 'wheel', onWheel);
-    on(img, 'panzoomzoom', throttle(onPanZoom, THROTTLE_DELAY));
+    on(img, 'panzoomzoom', throttle(onPanZoom, lightbox.throttleDelay));
     on(img, 'panzoomend', onPanZoomEnd);
 
     // Add listeners that are called by the lightbox component
     on(slide, 'zoom.in', onZoomIn);
     on(slide, 'zoom.out', onZoomOut);
     on(slide, 'zoom.reset', onZoomReset);
-    on(slide, 'zoom.resize', scaleImgToSlide);
 
     // On double click / double tap zoom in
     on(img, 'dblclick', onZoomIn);
     listenForDoubleTap(img, onZoomIn);
 
-    // Add the exclude class to the image in the beginning
+    // Disable panning the image in the beginning
     // to allow the user to navigate to the next slide by swiping the image
-    toggleImgState(true);
+    toggleImgZoomedCls(false);
 
     // Scale the image to the size of the slide
-    scaleImgToSlide();
+    scaleImgToSlide(slide, img);
 }
 
 function createEl(tag, attrs) {
