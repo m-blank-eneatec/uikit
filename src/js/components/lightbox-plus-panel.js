@@ -478,7 +478,7 @@ function listenForDoubleTap(el, cb, delay = 300) {
     let lastTapTime = 0;
     let isMoving = false;
 
-    el.addEventListener('touchstart', function(event) {
+    el.addEventListener('touchstart', (event) => {
         const currentTime = performance.now();
         const tapTime = currentTime - lastTapTime;
         lastTapTime = currentTime;
@@ -492,12 +492,8 @@ function listenForDoubleTap(el, cb, delay = 300) {
         }
     });
 
-    el.addEventListener('touchmove', function(event) {
-        if (event.touches.length > 1) {
-            isMoving = true;
-        } else {
-            isMoving = false;
-        }
+    el.addEventListener('touchmove', (event) => {
+        isMoving = (event.touches.length > 1);
     });
 }
 
