@@ -47,6 +47,7 @@ export default {
         template: String,
         zoomImages: Boolean,
         scaleImages: Boolean,
+        inverse: Boolean
     },
 
     data: () => ({
@@ -55,6 +56,7 @@ export default {
         delayControls: 3000,
         zoomImages: true,
         scaleImages: false,
+        inverse: false,
         originalImageSrcThreshold: 2, // Once the user has zoomed in by this amount, the original image source will be set as the src attribute
         throttleDelay: 250, // Throttle expensive event handlers to prevent performance issues
         items: [],
@@ -94,6 +96,10 @@ export default {
         const closeLabel = this.t('close');
         if (close && closeLabel) {
             close.dataset.i18n = JSON.stringify({ label: closeLabel });
+        }
+
+        if (this.inverse) {
+            addClass($el, this.clsInverse);
         }
 
         this.$mount(append(this.container, $el));
@@ -148,7 +154,7 @@ export default {
                 return this.selInverseToggle;
             },
 
-            handler(e) {
+            handler() {
                 toggleClass(this.$el, this.clsInverse);
             },
         },
@@ -591,7 +597,15 @@ function initZoom(lightbox, slide, img, options) {
     }
 
     function onZoomReset() {
-        zoom.reset({ animate: false });
+        zoom.reset({ animate: zoomOptions.animate });
+    }
+
+    function onZoomToggle() {
+        if (zoom.getScale() > 1) {
+            onZoomReset();
+        } else {
+            onZoomIn();
+        }
     }
 
     function toggleImgZoomedCls(hasZoomed) {
@@ -689,7 +703,7 @@ function initZoom(lightbox, slide, img, options) {
 
     // On double click / double tap zoom in
     on(img, 'dblclick', onZoomIn);
-    listenForDoubleTap(img, onZoomIn);
+    listenForDoubleTap(img, onZoomToggle);
 
     // Disable panning the image in the beginning
     // to allow the user to navigate to the next slide by swiping the image

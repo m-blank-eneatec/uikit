@@ -5228,7 +5228,8 @@
         videoAutoplay: Boolean,
         template: String,
         zoomImages: Boolean,
-        scaleImages: Boolean
+        scaleImages: Boolean,
+        inverse: Boolean
       },
       data: () => ({
         preload: 1,
@@ -5236,6 +5237,7 @@
         delayControls: 3e3,
         zoomImages: true,
         scaleImages: false,
+        inverse: false,
         originalImageSrcThreshold: 2,
         // Once the user has zoomed in by this amount, the original image source will be set as the src attribute
         throttleDelay: 250,
@@ -5266,6 +5268,9 @@
         const closeLabel = this.t("close");
         if (close && closeLabel) {
           close.dataset.i18n = JSON.stringify({ label: closeLabel });
+        }
+        if (this.inverse) {
+          addClass($el, this.clsInverse);
         }
         this.$mount(append(this.container, $el));
       },
@@ -5307,7 +5312,7 @@
           delegate() {
             return this.selInverseToggle;
           },
-          handler(e) {
+          handler() {
             toggleClass(this.$el, this.clsInverse);
           }
         },
@@ -5631,7 +5636,14 @@
         zoom.zoomOut({ step: zoomOptions.step * 2, animate: zoomOptions.animate });
       }
       function onZoomReset() {
-        zoom.reset({ animate: false });
+        zoom.reset({ animate: zoomOptions.animate });
+      }
+      function onZoomToggle() {
+        if (zoom.getScale() > 1) {
+          onZoomReset();
+        } else {
+          onZoomIn();
+        }
       }
       function toggleImgZoomedCls(hasZoomed) {
         toggleClass(img, lightbox.clsPanDisabled, !hasZoomed);
@@ -5690,7 +5702,7 @@
       on(slide, "zoom.out", onZoomOut);
       on(slide, "zoom.reset", onZoomReset);
       on(img, "dblclick", onZoomIn);
-      listenForDoubleTap(img, onZoomIn);
+      listenForDoubleTap(img, onZoomToggle);
       toggleImgZoomedCls(false);
       if (lightbox.scaleImages) {
         scaleImgToSlide(slide, img);
