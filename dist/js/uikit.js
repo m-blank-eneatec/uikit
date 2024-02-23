@@ -5701,7 +5701,7 @@
       on(slide, "zoom.in", onZoomIn);
       on(slide, "zoom.out", onZoomOut);
       on(slide, "zoom.reset", onZoomReset);
-      on(img, "dblclick", onZoomIn);
+      on(img, "dblclick", onZoomToggle);
       listenForDoubleTap(img, onZoomToggle);
       toggleImgZoomedCls(false);
       if (lightbox.scaleImages) {
