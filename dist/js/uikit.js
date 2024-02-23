@@ -5639,11 +5639,13 @@
         zoom.reset({ animate: zoomOptions.animate });
       }
       function onZoomToggle() {
+        const shouldZoomIn = zoom.getScale() === 1;
         if (zoom.getScale() > 1) {
-          onZoomReset();
-        } else {
           onZoomIn();
+        } else {
+          onZoomReset();
         }
+        toggleImgZoomedCls(shouldZoomIn);
       }
       function toggleImgZoomedCls(hasZoomed) {
         toggleClass(img, lightbox.clsPanDisabled, !hasZoomed);
@@ -5701,7 +5703,7 @@
       on(slide, "zoom.in", onZoomIn);
       on(slide, "zoom.out", onZoomOut);
       on(slide, "zoom.reset", onZoomReset);
-      on(img, "dblclick", onZoomToggle);
+      on(img, "dblclick", onZoomIn);
       listenForDoubleTap(img, onZoomToggle);
       toggleImgZoomedCls(false);
       if (lightbox.scaleImages) {

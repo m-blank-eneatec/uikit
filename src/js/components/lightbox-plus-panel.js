@@ -601,11 +601,13 @@ function initZoom(lightbox, slide, img, options) {
     }
 
     function onZoomToggle() {
+        const shouldZoomIn = (zoom.getScale() === 1);
         if (zoom.getScale() > 1) {
-            onZoomReset();
-        } else {
             onZoomIn();
+        } else {
+            onZoomReset();
         }
+        toggleImgZoomedCls(shouldZoomIn);
     }
 
     function toggleImgZoomedCls(hasZoomed) {
