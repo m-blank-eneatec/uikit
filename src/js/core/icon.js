@@ -123,8 +123,8 @@ export const Search = {
 
     beforeConnect() {
         const isToggle = hasClass(this.$el, 'uk-search-toggle') || hasClass(this.$el, 'uk-navbar-toggle');
-        this.icon = isToggle 
-            ? 'search-toggle-icon' 
+        this.icon = isToggle
+            ? 'search-toggle-icon'
             : hasClass(this.$el, 'uk-search-icon') && closest(this.$el, '.uk-search-large')
                 ? 'search-large'
                 : closest(this.$el, '.uk-search-navbar')

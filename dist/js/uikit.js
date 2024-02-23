@@ -5213,6 +5213,12 @@
         return fn;
     }
 
+    var bolt = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\"><path d=\"M4.74,20 L7.73,12 L3,12 L15.43,1 L12.32,9 L17.02,9 L4.74,20 L4.74,20 L4.74,20 Z M9.18,11 L7.1,16.39 L14.47,10 L10.86,10 L12.99,4.67 L5.61,11 L9.18,11 L9.18,11 L9.18,11 Z\"/></svg>";
+
+    var eye = "<svg width=\"20\" height=\"20\" viewBox=\"0 0 20 20\"><circle fill=\"none\" stroke=\"#000\" cx=\"10\" cy=\"10\" r=\"3.45\"/><path fill=\"none\" stroke=\"#000\" d=\"m19.5,10c-2.4,3.66-5.26,7-9.5,7h0,0,0c-4.24,0-7.1-3.34-9.49-7C2.89,6.34,5.75,3,9.99,3h0,0,0c4.25,0,7.11,3.34,9.5,7Z\"/></svg>";
+
+    UIkit.icon.add("bolt", bolt);
+    UIkit.icon.add("eye", eye);
     var LightboxPlusPanel = {
       mixins: [Modal, Slideshow],
       functional: true,
@@ -5236,19 +5242,21 @@
         // Throttle expensive event handlers to prevent performance issues
         items: [],
         cls: "uk-open",
+        clsInverse: "uk-lightbox-plus-inverse",
         clsPage: "uk-lightbox-plus-page",
         clsPanDisabled: "uk-lightbox-plus-pan-disabled",
         clsSwipeDisabled: "uk-lightbox-plus-swipe-disabled",
         clsImage: "uk-lightbox-plus-image",
         selList: ".uk-lightbox-plus-items",
         attrItem: "uk-lightbox-plus-item",
+        selInverseToggle: ".uk-lightbox-plus-inverse-toggle",
         selClose: ".uk-close-large",
         selCaption: ".uk-lightbox-plus-caption",
         pauseOnHover: false,
         velocity: 2,
         Animations: Animations$1,
         draggable: !hasTouch,
-        template: `<div class="uk-lightbox-plus uk-overflow-hidden"> <ul class="uk-lightbox-plus-items"></ul> <div class="uk-lightbox-plus-toolbar uk-position-top uk-text-right uk-transition-slide-top uk-transition-opaque"> <button class="uk-lightbox-plus-toolbar-icon uk-close-large" type="button" uk-close></button> </div> <a class="uk-lightbox-plus-button uk-position-center-left uk-position-medium uk-transition-fade" href uk-slidenav-previous uk-lightbox-plus-item="previous"></a> <a class="uk-lightbox-plus-button uk-position-center-right uk-position-medium uk-transition-fade" href uk-slidenav-next uk-lightbox-plus-item="next"></a> <div class="uk-lightbox-plus-toolbar uk-lightbox-plus-caption uk-position-bottom uk-text-center uk-transition-slide-bottom uk-transition-opaque"></div> </div>`
+        template: `<div class="uk-lightbox-plus uk-overflow-hidden"> <ul class="uk-lightbox-plus-items"></ul> <div class="uk-lightbox-plus-toolbar uk-position-top uk-text-right uk-transition-slide-top uk-transition-opaque"> <button class="uk-lightbox-plus-toolbar-icon uk-lightbox-plus-inverse-toggle" type="button" uk-icon="icon: eye; ratio: 1.2"></button> <button class="uk-lightbox-plus-toolbar-icon uk-close-large" type="button" uk-close></button> </div> <a class="uk-lightbox-plus-button uk-position-center-left uk-position-medium uk-transition-fade" href uk-slidenav-previous uk-lightbox-plus-item="previous"></a> <a class="uk-lightbox-plus-button uk-position-center-right uk-position-medium uk-transition-fade" href uk-slidenav-next uk-lightbox-plus-item="next"></a> <div class="uk-lightbox-plus-toolbar uk-lightbox-plus-caption uk-position-bottom uk-text-center uk-transition-slide-bottom uk-transition-opaque"></div> </div>`
       }),
       created() {
         const $el = $(this.template);
@@ -5292,6 +5300,15 @@
             if (!e.defaultPrevented) {
               this.hide();
             }
+          }
+        },
+        {
+          name: "click",
+          delegate() {
+            return this.selInverseToggle;
+          },
+          handler(e) {
+            toggleClass(this.$el, this.clsInverse);
           }
         },
         {

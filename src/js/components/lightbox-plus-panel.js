@@ -29,6 +29,11 @@ import { keyMap } from '../util/keys';
 import Animations from './internal/lightbox-animations';
 import Panzoom from '@panzoom/panzoom'
 import { throttle } from '@github/mini-throttle';
+import bolt from '../../images/components/bolt.svg';
+import eye from '../../images/components/eye.svg';
+
+UIkit.icon.add('bolt', bolt);
+UIkit.icon.add('eye', eye);
 
 export default {
     mixins: [Modal, Slideshow],
@@ -54,12 +59,14 @@ export default {
         throttleDelay: 250, // Throttle expensive event handlers to prevent performance issues
         items: [],
         cls: 'uk-open',
+        clsInverse: 'uk-lightbox-plus-inverse',
         clsPage: 'uk-lightbox-plus-page',
         clsPanDisabled: 'uk-lightbox-plus-pan-disabled',
         clsSwipeDisabled: 'uk-lightbox-plus-swipe-disabled',
         clsImage: 'uk-lightbox-plus-image',
         selList: '.uk-lightbox-plus-items',
         attrItem: 'uk-lightbox-plus-item',
+        selInverseToggle: '.uk-lightbox-plus-inverse-toggle',
         selClose: '.uk-close-large',
         selCaption: '.uk-lightbox-plus-caption',
         pauseOnHover: false,
@@ -69,6 +76,7 @@ export default {
         template: `<div class="uk-lightbox-plus uk-overflow-hidden">
                         <ul class="uk-lightbox-plus-items"></ul>
                         <div class="uk-lightbox-plus-toolbar uk-position-top uk-text-right uk-transition-slide-top uk-transition-opaque">
+                            <button class="uk-lightbox-plus-toolbar-icon uk-lightbox-plus-inverse-toggle" type="button" uk-icon="icon: eye; ratio: 1.2"></button>
                             <button class="uk-lightbox-plus-toolbar-icon uk-close-large" type="button" uk-close></button>
                          </div>
                         <a class="uk-lightbox-plus-button uk-position-center-left uk-position-medium uk-transition-fade" href uk-slidenav-previous uk-lightbox-plus-item="previous"></a>
@@ -130,6 +138,18 @@ export default {
                 if (!e.defaultPrevented) {
                     this.hide();
                 }
+            },
+        },
+
+        {
+            name: 'click',
+
+            delegate() {
+                return this.selInverseToggle;
+            },
+
+            handler(e) {
+                toggleClass(this.$el, this.clsInverse);
             },
         },
 

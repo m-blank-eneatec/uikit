@@ -56,10 +56,16 @@
     background: $lightbox-background;
     /* 6 */
     opacity: 0;
-    transition: opacity 0.15s linear;
+    transition: 0.15s ease-in-out;
+    transition-property: background, opacity;
     /* 7 */
     touch-action: pinch-zoom;
     @if(mixin-exists(hook-lightbox-plus)) {@include hook-lightbox-plus();}
+}
+
+.uk-lightbox-plus.uk-lightbox-plus-inverse
+{
+    @if(mixin-exists(hook-inverse-lightbox-plus)) {@include hook-inverse-lightbox-plus();}
 }
 
 /*
@@ -78,7 +84,10 @@
  * Focus
  */
 
-.uk-lightbox-plus :focus-visible { outline-color: $lightbox-focus-outline; }
+.uk-lightbox-plus :focus-visible {
+    outline-color: $lightbox-focus-outline;
+    transition: outline-color 0.15s ease-in-out;
+}
 
 
 /* Page
@@ -116,6 +125,7 @@
     align-items: center;
     /* 3 */
     color: $lightbox-item-color;
+    transition: color 0.15s ease-in-out;
     /* 4 */
     will-change: transform, opacity;
     @if(mixin-exists(hook-lightbox-plus-item)) {@include hook-lightbox-plus-item();}
@@ -127,8 +137,16 @@
     max-height: $lightbox-item-max-height;
 }
 
+/*
+ * 1. Preserve the aspect ratio during scaling
+ * 2. Display a checkered background for transparent images (optimized and minified using SVGO)
+ *    Original SVG file: <svg xmlns="http://www.w3.org/2000/svg" fill-opacity="0.1"><rect x="10" width="10" height="10" /><rect y="10" width="10" height="10" /></svg>
+ */
 .uk-lightbox-plus-items > * > img {
+    /* 1 */
     object-fit: contain;
+    /* 2 */
+    /* background: #fff url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill-opacity=".1"><path d="M10 0h10v10H10zM0 10h10v10H0z"/></svg>') 0 0 / 20px 20px repeat; */
 }
 
 .uk-lightbox-plus-items > * > :not(iframe) {
@@ -145,10 +163,15 @@
     padding: $lightbox-toolbar-padding-vertical $lightbox-toolbar-padding-horizontal;
     background: $lightbox-toolbar-background;
     color: $lightbox-toolbar-color;
+    transition: 0.15s ease-in-out;
+    transition-property: background, color;
     @if(mixin-exists(hook-lightbox-plus-toolbar)) {@include hook-lightbox-plus-toolbar();}
 }
 
-.uk-lightbox-plus-toolbar > * { color: $lightbox-toolbar-color; }
+.uk-lightbox-plus-toolbar > * {
+    color: $lightbox-toolbar-color;
+    transition: color 0.15s ease-in-out;
+}
 
 
 /* Toolbar Icon (Close)
@@ -157,6 +180,7 @@
 .uk-lightbox-plus-toolbar-icon {
     padding: $lightbox-toolbar-icon-padding;
     color: $lightbox-toolbar-icon-color;
+    transition: color 0.15s ease-in-out;
     @if(mixin-exists(hook-lightbox-plus-toolbar-icon)) {@include hook-lightbox-plus-toolbar-icon();}
 }
 
@@ -184,6 +208,8 @@
     height: $lightbox-button-size;
     background: $lightbox-button-background;
     color: $lightbox-button-color;
+    transition: 0.15s ease-in-out;
+    transition-property: background, color;
     /* 1 */
     display: inline-flex;
     justify-content: center;
@@ -232,3 +258,20 @@
 // @mixin hook-lightbox-plus-button-hover(){}
 // @mixin hook-lightbox-plus-button-active(){}
 // @mixin hook-lightbox-plus-misc(){}
+
+
+
+// Inverse
+// ========================================================================
+
+
+
+
+// @mixin hook-inverse-lightbox-plus(){}
+// @mixin hook-inverse-lightbox-plus-item(){}
+// @mixin hook-inverse-lightbox-plus-toolbar(){}
+// @mixin hook-inverse-lightbox-plus-toolbar-icon(){}
+// @mixin hook-inverse-lightbox-plus-toolbar-icon-hover(){}
+// @mixin hook-inverse-lightbox-plus-button(){}
+// @mixin hook-inverse-lightbox-plus-button-hover(){}
+// @mixin hook-inverse-lightbox-plus-button-active(){}

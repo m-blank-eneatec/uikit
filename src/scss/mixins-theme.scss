@@ -1167,6 +1167,83 @@
 @mixin hook-lightbox-button-hover(){}
 @mixin hook-lightbox-button-active(){}
 @mixin hook-lightbox-misc(){}
+@mixin hook-inverse-lightbox-plus(){
+
+    background: $inverse-lightbox-background;
+
+    /*
+     * Focus
+     */
+
+    & :focus-visible {
+        outline-color: $inverse-lightbox-focus-outline;
+    }
+
+
+    /* Item
+     ========================================================================== */
+
+    & .uk-lightbox-plus-items > * {
+        color: $inverse-lightbox-item-color;
+        @if(mixin-exists(hook-inverse-lightbox-plus-item)) {@include hook-inverse-lightbox-plus-item();}
+    }
+
+    /* Toolbar
+    ========================================================================== */
+
+    .uk-lightbox-plus-toolbar {
+        background: $inverse-lightbox-toolbar-background;
+        color: $inverse-lightbox-toolbar-color;
+        @if(mixin-exists(hook-inverse-lightbox-plus-toolbar)) {@include hook-inverse-lightbox-plus-toolbar();}
+    }
+
+    .uk-lightbox-plus-toolbar > * { color: $inverse-lightbox-toolbar-color; }
+
+
+    /* Toolbar Icon (Close)
+    ========================================================================== */
+
+    .uk-lightbox-plus-toolbar-icon {
+        color: $inverse-lightbox-toolbar-icon-color;
+        @if(mixin-exists(hook-inverse-lightbox-plus-toolbar-icon)) {@include hook-inverse-lightbox-plus-toolbar-icon();}
+    }
+
+    /*
+    * Hover
+    */
+
+    .uk-lightbox-plus-toolbar-icon:hover {
+        color: $inverse-lightbox-toolbar-icon-hover-color;
+        @if(mixin-exists(hook-inverse-lightbox-plus-toolbar-icon-hover)) {@include hook-inverse-lightbox-plus-toolbar-icon-hover();}
+    }
+
+
+
+    /* Button (Slidenav)
+    ========================================================================== */
+
+    /*
+    * 1. Center icon vertically and horizontally
+    */
+
+    .uk-lightbox-plus-button {
+        background: $inverse-lightbox-button-background;
+        color: $inverse-lightbox-button-color;
+        @if(mixin-exists(hook-inverse-lightbox-plus-button)) {@include hook-inverse-lightbox-plus-button();}
+    }
+
+    /* Hover */
+    .uk-lightbox-plus-button:hover {
+        color: $inverse-lightbox-button-hover-color;
+        @if(mixin-exists(hook-inverse-lightbox-plus-button-hover)) {@include hook-inverse-lightbox-plus-button-hover();}
+    }
+
+    /* OnClick */
+    .uk-lightbox-plus-button:active {
+        @if(mixin-exists(hook-inverse-lightbox-plus-button-active)) {@include hook-inverse-lightbox-plus-button-active();}
+    }
+
+}
 @mixin hook-link-muted(){}
 @mixin hook-link-muted-hover(){}
 @mixin hook-link-text(){}
