@@ -41,6 +41,7 @@ export default {
         videoAutoplay: Boolean,
         template: String,
         zoomImages: Boolean,
+        scaleImages: Boolean,
     },
 
     data: () => ({
@@ -48,6 +49,7 @@ export default {
         videoAutoplay: false,
         delayControls: 3000,
         zoomImages: true,
+        scaleImages: false,
         originalImageSrcThreshold: 2, // Once the user has zoomed in by this amount, the original image source will be set as the src attribute
         throttleDelay: 250, // Throttle expensive event handlers to prevent performance issues
         items: [],
@@ -154,7 +156,7 @@ export default {
                         const slide = this.getSlide(this.index);
                         const img = $(`.${this.clsImage}`, slide);
 
-                        if (img) {
+                        if (img && this.scaleImages) {
                             scaleImgToSlide(slide, img);
                         }
                     }
@@ -273,7 +275,7 @@ export default {
                 if (!slide.childElementCount) {
                     // Preload this item first
                     this.loadItem(this.index);
-                } else if (img) {
+                } else if (img && this.scaleImages) {
                     scaleImgToSlide(slide, img);
                 }
 
@@ -674,7 +676,9 @@ function initZoom(lightbox, slide, img, options) {
     toggleImgZoomedCls(false);
 
     // Scale the image to the size of the slide
-    scaleImgToSlide(slide, img);
+    if (lightbox.scaleImages) {
+        scaleImgToSlide(slide, img);
+    }
 }
 
 function createEl(tag, attrs) {

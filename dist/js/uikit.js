@@ -5221,13 +5221,15 @@
         preload: Number,
         videoAutoplay: Boolean,
         template: String,
-        zoomImages: Boolean
+        zoomImages: Boolean,
+        scaleImages: Boolean
       },
       data: () => ({
         preload: 1,
         videoAutoplay: false,
         delayControls: 3e3,
         zoomImages: true,
+        scaleImages: false,
         originalImageSrcThreshold: 2,
         // Once the user has zoomed in by this amount, the original image source will be set as the src attribute
         throttleDelay: 250,
@@ -5308,7 +5310,7 @@
               if (this.zoomImages) {
                 const slide = this.getSlide(this.index);
                 const img = $(`.${this.clsImage}`, slide);
-                if (img) {
+                if (img && this.scaleImages) {
                   scaleImgToSlide(slide, img);
                 }
               }
@@ -5395,7 +5397,7 @@
             html(this.caption, item.caption || "");
             if (!slide.childElementCount) {
               this.loadItem(this.index);
-            } else if (img) {
+            } else if (img && this.scaleImages) {
               scaleImgToSlide(slide, img);
             }
             setTimeout(() => {
@@ -5673,7 +5675,9 @@
       on(img, "dblclick", onZoomIn);
       listenForDoubleTap(img, onZoomIn);
       toggleImgZoomedCls(false);
-      scaleImgToSlide(slide, img);
+      if (lightbox.scaleImages) {
+        scaleImgToSlide(slide, img);
+      }
     }
     function createEl(tag, attrs) {
       const el = fragment(`<${tag}>`);
