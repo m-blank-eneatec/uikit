@@ -1,5 +1,47 @@
 # Changelog
 
+## 3.19.2 (March 12, 2024)
+
+### Added
+
+- Add center vertical and horizontal classes to Position component
+
+### Fixed
+
+- Fix `scrollIntoView()` when target is covered by another element
+
+## 3.19.1 (March 1, 2024)
+
+### Added
+
+- Add Bluesky icon
+
+### Fixed
+
+- Fix Video component handles fullscreen mode correctly
+
+## 3.19.0 (February 29, 2024)
+
+### Added
+
+- Add breakpoint classes for flex direction, dimension and alignment
+- Add `active` option to Slider component
+
+### Changed
+
+- Remove obsolete fix for rounding issues in Width component in IE11/Edge
+
+### Fixed
+
+- Fix width expand classes mixed with other width classes of higher breakpoints in Width component
+- Fix combination of width auto and expand breakpoint classes
+- Fix logo inverse selector to work with different types of images
+- Fix Tooltips not showing in iOS
+- Fix parallax scrolling for Slideshow/Slider component with finite mode
+- Fix Slider component disables infinite scrolling prematurely
+- Fix Sass sources by renaming spin() (LESS) to adjust-hue() (Sass)
+- Fix Height Match component recalculates its heights, when a font has loaded
+
 ## 3.18.3 (February 13, 2024)
 
 ### Fixed
